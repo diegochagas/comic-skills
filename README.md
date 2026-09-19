@@ -5,8 +5,9 @@ comic studio (page scripts → AI-generated pages reviewed one by one, cover
 and editorial as editable GIMP `.xcf` → `.cbz`), manga scans →
 letter-ready or PT-BR-translated layered PSD/XCF files, a pattern-based
 page downloader, and small CLI skills for comic archives, PDF/PSD
-conversion, image batches and Japanese OCR, plus an AI text eraser
-(textless copies of pages, nothing else changed).
+conversion, image batches and Japanese OCR, an AI text eraser
+(textless copies of pages, nothing else changed) and a PSD folder sync that
+only replaces pages whose art was not cropped.
 
 > These skills are tailored to this machine (flatpak GIMP 3, a Higgsfield
 > Plus subscription, Brazilian Portuguese as the target language). Treat them
@@ -44,6 +45,7 @@ the repo root.
 | [`comic-downloader`](comic-downloader/) ([README](comic-downloader/README.md)) | `download.cjs`, `sites/<name>/download.config.json` | Downloads comic/magazine page images whose URLs follow a pattern (numbered pages, issues with dates, galleries, URL lists) from JSON site profiles; dry-run first, skips existing files. Bundled profile: Dorothee Magazine. |
 | [`comic-archive`](comic-archive/) | `images_to_cbr.py`, `cbr_to_images.py` | Pack image folders into `.cbr`/`.cbz` (optional JPEG conversion, max height, quality) and unpack `.cbr`/`.cbz`/`.zip` archives (RAR via unrar/7z; `--first-only` for covers). The SKILL.md maps what the user asks for to the flags. |
 | [`pdf-psd-convert`](pdf-psd-convert/) | `pdf_to_images.py`, `psd_to_jpg.py` | PDF pages → JPG at any DPI (one folder per PDF or one shared folder); `.psd`/`.psb` → JPG recursively, keeping folder structure, with matte color and an optional all-layers-visible render. |
+| [`psd-sync`](psd-sync/) | `sync_psds.py` | Compares the same-named PSDs of two folders by their art layer (bottom-most pixel layer covering the canvas, `Original` in Diego's files) and replaces folder 2's copy with folder 1's — old copy to the trash, new file moved in — only where the artwork was **not** cropped. Pages whose art was cut on any side (with or without a resize afterwards, found down to half a side and reported in pixels) stay where they are in both folders. Dry run by default; `--apply` is the only thing that moves anything. |
 | [`image-utils`](image-utils/) | `rotate_images.py`, `stretch_pngs.py` | Rotate every image in a folder in place by N degrees; stretch every PNG to exact W×H into `output/`. |
 | [`japanese-ocr-translate`](japanese-ocr-translate/) | `transcribe_japanese_images.py`, `translate_japanese_texts_ptbr.py`, `tessdata/` | Tesseract OCR of a folder of Japanese scans into one block-per-page TXT, then Google-translate it to PT-BR keeping the blocks — a rough reading pass, not lettering. |
 
@@ -66,7 +68,7 @@ this repo. To use them from anywhere, symlink the skill folders into the
 global directories, the same way:
 
 ```sh
-for s in generate-comic-page manga-translator-ptbr clean-texts comic-downloader comic-archive pdf-psd-convert image-utils japanese-ocr-translate; do
+for s in generate-comic-page manga-translator-ptbr clean-texts comic-downloader comic-archive pdf-psd-convert psd-sync image-utils japanese-ocr-translate; do
   for h in ~/.claude/skills ~/.agents/skills ~/.codex/skills; do
     mkdir -p "$h" && ln -sfn ~/Projects/comic-skills/$s "$h/$s"
   done
@@ -132,6 +134,7 @@ place.
 | `comic-downloader` | `~/Downloads/<profile outputDir>/` |
 | `comic-archive` | `~/Downloads/<folder>.cbr`, `~/Downloads/<folder>/<chapter>.cbr`; unpacked: `~/Downloads/<folder>/<archive>/` |
 | `pdf-psd-convert` | `~/Downloads/<folder>/<PdfName>/`; `~/Downloads/<folder> JPG/` |
+| `psd-sync` | nothing by default (it moves files between the two folders it is given); `--json` writes `~/Downloads/<folder1 name>-psd-sync.json` |
 | `image-utils` | `~/Downloads/<folder> rotated <deg>/`, `~/Downloads/<folder> <W>x<H>/` |
 | `japanese-ocr-translate` | `~/Downloads/<folder>/japanese_transcription.txt` (+ `_pt_br.txt`) |
 

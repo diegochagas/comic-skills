@@ -9,7 +9,10 @@ Skills: `generate-comic-page` (AI comic studio, one reviewed page at a time), `m
 letter-ready or PT-BR translated PSD/XCF files), `clean-texts` (Higgsfield
 text eraser: textless PNG copies, every pixel outside the erased text restored
 from the original; the agent QCs each result), `comic-downloader`
-(pattern-based page downloads from JSON site profiles), `comic-archive`, `pdf-psd-convert`, `image-utils`, `japanese-ocr-translate`
+(pattern-based page downloads from JSON site profiles), `psd-sync` (two folders of
+PSDs compared by their art layer: folder 2's copy is replaced only when the
+art was not cropped, and only after Diego approves the dry run),
+`comic-archive`, `pdf-psd-convert`, `image-utils`, `japanese-ocr-translate`
 (CLI wrappers that pick flags from the request). `.claude/skills/` and
 `.agents/skills/` contain symlinks to those folders; the `higgsfield-*`
 entries there are vendored third-party skills (`skills-lock.json`) — never
@@ -84,6 +87,11 @@ edit them.
   `generate-comic-page` projects), plus an `--output` / `OUT=` override.
   Scripts never modify their input files. New scripts follow the same rule;
   the README's "Rules" table lists each skill's default location.
+
+- `psd-sync` is the exception to "never touch the input": it trashes and
+  moves the very files it is pointed at. It runs as a dry run first, Diego
+  sees the list, and only then the same command with `--apply`; deleting is
+  always `gio trash`/`trash-put`, never `rm`.
 
 - Keep scripts inside their skill folder and document new ones in both the
   skill's `SKILL.md` and the README table.
