@@ -50,7 +50,8 @@ need `<skill>/node_modules` (ag-psd, canvas, pngjs - `npm install` in
 `manga-translator-ptbr/`, done by `setup.sh`); the ONNX models are
 `<skill>/models/comictextdetector.pt.onnx` (text detector) and
 `<skill>/models/lama_fp32.onnx` (LaMa inpainting, optional - without it
-busy-background erases fall back to OpenCV Telea). The venv comes from
+busy-background erases fall back to OpenCV Telea; `INPAINT=qwen` sends those
+regions to a local Qwen-Image-Edit instead, see "Local AI inpainting"). The venv comes from
 `<repo>/setup.sh`, the rest from `<skill>/setup.sh` (which the root one runs).
 PSDs are written by ag-psd (no GIMP). XCF output needs flatpak GIMP 3
 (`org.gimp.GIMP`; `GIMP_CMD` env for another launcher).
@@ -560,7 +561,33 @@ by `setup.sh`) - the equivalent of Photoshop's generative fill for text over
 drawings. Without the model file (or with `INPAINT=telea`) it falls back to
 `cv2.inpaint`. `<stem>_clean_overlay.jpg` tints what was touched (red = solid
 fill, green = inpainted) - check it before building. The detect json records
-`inpaint_method` (`lama`/`telea`).
+`inpaint_method` (`lama`/`telea`/`qwen`).
+
+### Local AI inpainting with Qwen-Image-Edit (`INPAINT=qwen`)
+
+`INPAINT=qwen` (env, on `detect_text.py`, `clean_blocks.py` and the
+`run_*_round.sh` scripts) erases text over art with **Qwen-Image-Edit-2511**
+running locally in ComfyUI - free, offline, and much better at rebuilding
+structure (hair, faces, armor, panel lines) where LaMa smears. It is a hybrid:
+each region is measured and the ones sitting on **flat screentone** (halftone
+dots, no line structure - where the model leaves a flat grey patch and LaMa
+continues the dot pattern) go to LaMa, everything else to the model.
+`INPAINT_ROUTE=qwen` disables that and sends every region to the model.
+Plain-colour fills are untouched either way, and only masked pixels change.
+
+Costs ~100 s per page that has text over art (RTX 3050 6 GB), against ~10 s
+for LaMa; a page whose text is all in balloons costs nothing extra. A region the model leaves unerased, a crop it fails on, or an
+unreachable server falls back to LaMa automatically (it says so on stderr).
+
+Requires ComfyUI with the ComfyUI-GGUF node and the four Qwen model files
+listed in `scripts/inpaint_qwen.py`'s header (not installed by `setup.sh`).
+`COMFYUI_URL` (default `http://127.0.0.1:8188`) and `COMFYUI_SERVICE` (a
+systemd `--user` unit the script starts when the server is down) configure it:
+
+```bash
+INPAINT=qwen COMFYUI_SERVICE=comfyui <repo>/venv/bin/python \
+  manga-translator-ptbr/scripts/detect_text.py <out_dir> <img> [...]
+```
 
 Run the whole folder in chunks: detect+clean is ~15-25 s/page on 2 cores and
 a shell call may be capped at ~3 min, so loop 5-8 pages per call with a

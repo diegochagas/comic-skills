@@ -37,6 +37,15 @@ edit them.
   `-f`) writes XCFs from the same blocks JSON (`--placeholder` for mode C). The
   skill always runs its pipeline to the end and delivers PSDs; XCF only
   when the request explicitly asks for GIMP files.
+- Erasing text over art (`manga-translator-ptbr`'s `inpaint_lama.py`, used by
+  `detect_text.py`/`clean_blocks.py` and by `clean-texts --backend local`) has
+  three backends, chosen with `INPAINT`: LaMa (default), `telea`, and `qwen` =
+  `inpaint_qwen.py`, a local Qwen-Image-Edit-2511 in ComfyUI (free, offline,
+  best on structured art; needs a running server, see that file's header).
+  `qwen` is really a hybrid: flat-screentone regions still go to LaMa
+  (`INPAINT_ROUTE=qwen` forces the model everywhere), and anything the model
+  misses or fails on falls back to LaMa on its own.
+
 - `generate-comic-page` keeps its comic projects OUTSIDE the repo:
   `~/Downloads/<project>/` (`COMIC_PROJECTS_DIR` overrides the root, `-p
   <path>` points at a project anywhere) with `project.json`, `PROJECT.md`,

@@ -1,13 +1,24 @@
 ---
 name: clean-texts
-description: Erase the text from an image or from every image in a folder (comic/manga pages, covers, art-book scans, screenshots, posters) through Higgsfield, changing nothing else - balloons stay but empty, art behind the letters is rebuilt, every pixel outside the erased text is copied back from the original. With a language ("only the Japanese", "remove the English text") only the text in that language is erased and the rest stays letter by letter. Results are PNGs with the original file names in ~/Downloads. Use when Diego asks to "clean the texts", "remove/erase the text from this image/page/folder", "limpa os textos", "tira o texto", "apaga só o japonês", or wants textless versions of pages. For letter-ready PSD/XCF files with text boxes use manga-translator-ptbr instead.
+description: Erase the text from an image or from every image in a folder (comic/manga pages, covers, art-book scans, screenshots, posters) through Higgsfield, or free and offline with the local backend (text detector + Qwen-Image-Edit in ComfyUI), changing nothing else - balloons stay but empty, art behind the letters is rebuilt, every pixel outside the erased text is copied back from the original. With a language ("only the Japanese", "remove the English text") only the text in that language is erased and the rest stays letter by letter. Results are PNGs with the original file names in ~/Downloads. Use when Diego asks to "clean the texts", "remove/erase the text from this image/page/folder", "limpa os textos", "tira o texto", "apaga só o japonês", or wants textless versions of pages. For letter-ready PSD/XCF files with text boxes use manga-translator-ptbr instead.
 ---
 
 # clean-texts — textless copies of images, nothing else changed
 
-You are the orchestrator and visual QC reviewer; Higgsfield does the erasing
-through its CLI (billed in credits to Diego's Higgsfield Plus plan). There
-is no LLM API usage.
+You are the orchestrator and visual QC reviewer. Two backends do the erasing;
+there is no LLM API usage.
+
+| | `--backend higgsfield` (default) | `--backend local` |
+| --- | --- | --- |
+| Erases | any text the model sees, incl. stylised titles, SFX, tiny print | only what the detector finds (it misses some titles/SFX) |
+| One language only | yes (`--language`, `--keep`) | no — all detected text goes |
+| Cost / speed | ~1 credit, ~30 s per image | free, ~40 s + ~100 s per page that has text over art |
+| Erases art behind text with | the model, whole page | exact fill (balloons) + Qwen (art) + LaMa (flat screentone) |
+| Needs | `higgsfield` CLI logged in | ComfyUI running (see below) |
+
+Pick `local` when Diego asks for free/offline/local, when the balance is low,
+or for a big folder; Higgsfield when a single language must go, or when the
+local run leaves stylised text behind.
 
 One script, `clean-texts/scripts/clean_texts.py`, run with the repo venv
 (`<repo>/venv/bin/python`; needs Pillow, OpenCV, numpy — all in the shared
@@ -53,6 +64,32 @@ The image model redraws the whole picture, so the script:
 
 `--no-restore` delivers the raw model output instead (only if Diego asks).
 
+## `--backend local` (free, offline)
+
+```bash
+<repo>/venv/bin/python clean-texts/scripts/clean_texts.py "<image-or-folder>" --backend local
+```
+
+Per image: `manga-translator-ptbr`'s detector finds the text, fills it with
+the exact sampled background colour where the background is one plain colour
+(balloons, caption boxes — pixel-perfect, no AI), and hands the rest (text
+over art) to **Qwen-Image-Edit-2511** running locally in ComfyUI
+(`manga-translator-ptbr/scripts/inpaint_qwen.py`) — except regions sitting on
+flat screentone, which go to LaMa, which continues a dot pattern better
+(`INPAINT_ROUTE=qwen` sends those to the model too). Every pixel outside the
+detected text keeps its original value, so there is no restore step and no
+`--reuse-raw` / `--drop-region` / `--restore-threshold` / `--language` /
+`--keep` / `--fix` / `--cost` (the script rejects them).
+
+ComfyUI must be running with the ComfyUI-GGUF node and the four Qwen files
+(see `inpaint_qwen.py`'s header for names). `COMFYUI_SERVICE=<systemd --user
+unit>` lets the script start it; `COMFYUI_URL` points elsewhere. If it is
+unreachable the script says so and falls back to LaMa (`--inpaint lama`
+forces that). QC as usual, plus: art over which text sat was redrawn by the
+model — check it looks like the surrounding drawing.
+`clean-texts-work/<name>_overlay.jpg` tints what was touched (red = exact
+fill, green = model, yellow = strokes the detector left alone).
+
 ## Before the first generation of a session
 
 1. `higgsfield account status` — warn Diego under 100 credits, stop and ask
@@ -66,7 +103,7 @@ The image model redraws the whole picture, so the script:
 3. Auth errors → stop and ask Diego to run `higgsfield auth login`; never
    work around auth.
 
-## Workflow
+## Workflow (Higgsfield backend)
 
 ```bash
 <repo>/venv/bin/python clean-texts/scripts/clean_texts.py "<image-or-folder>" [--language "Japanese"] [--keep "..."]
@@ -119,6 +156,9 @@ generations per image.
   double-spends). Finished results are skipped on the rerun anyway.
 - Whack-a-mole is real: after every reroll re-check the WHOLE image, not
   only the defect you targeted.
+- `--backend local` never invents text and never changes the geometry, but a
+  stylised title the detector misses stays: say so and offer the Higgsfield
+  backend for that page.
 - Tiny print on huge scans (the model sees at most ~3000 px) may survive:
   crop that part to its own image, clean it, and tell Diego — or use
   `manga-translator-ptbr` (detector + LaMa) for those pages.

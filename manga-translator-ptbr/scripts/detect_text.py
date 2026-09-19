@@ -56,6 +56,9 @@ BLK_PAD = 8            # px padding around each text block box
 DET_THRESH = 0.4       # min prob in the DBNet-style text-line map ("det" head)
 DET_DILATE = 6         # px dilation of the text-line map
 BLK_OVERLAP = 0.3      # min fraction of a stroke component inside text regions
+BLK_SPILL = 0.8        # a component overlapping a block box with less than this
+                       # fraction inside it is text merged with art strokes
+                       # (hair, hatching): only its part inside the boxes is erased
 
 
 def letterbox(img):
@@ -128,6 +131,7 @@ def detect_page(sess, path, out_dir):
     allow = np.zeros((h, w), np.uint8)
     for bx, by, bbw, bbh in blocks:
         allow[by:by + bbh, bx:bx + bbw] = 255
+    blk_boxes = allow.copy()
     det_mask = (det[:nh, :nw] > DET_THRESH).astype(np.uint8) * 255
     det_mask = cv2.resize(det_mask, (w, h), interpolation=cv2.INTER_LINEAR)
     det_mask = (det_mask > 127).astype(np.uint8) * 255
@@ -155,6 +159,14 @@ def detect_page(sess, path, out_dir):
             skip_tint[y:y + bh, x:x + bw][labels[y:y + bh, x:x + bw] == i] = 255
             skipped += 1
             continue
+        # text merged with art strokes: keep only the part inside the block boxes
+        lab = labels[y:y + bh, x:x + bw]
+        in_blk = blk_boxes[y:y + bh, x:x + bw][lab == i] > 0
+        if in_blk.any() and in_blk.mean() < BLK_SPILL:
+            spill = (lab == i) & (blk_boxes[y:y + bh, x:x + bw] == 0)
+            skip_tint[y:y + bh, x:x + bw][spill] = 255
+            lab[spill] = 0
+            area = int((lab == i).sum())
         # background ring around this component, computed on a padded crop,
         # excluding every detected stroke (not just this component's)
         pad = RING_OUT + 2
@@ -210,14 +222,18 @@ def detect_page(sess, path, out_dir):
           f"{skipped} non-text skipped")
 
 
-def main():
-    out_dir = os.path.join(sys.argv[1], "detect")
+def make_session():
     # denormal-as-zero: this model's weights produce many denormal floats and
     # onnxruntime's default (DAZ off) makes one inference ~60x slower (90 s vs
     # 1.4 s measured 2026-09-03); output is unaffected
     so = ort.SessionOptions()
     so.add_session_config_entry("session.set_denormal_as_zero", "1")
-    sess = ort.InferenceSession(MODEL, so, providers=["CPUExecutionProvider"])
+    return ort.InferenceSession(MODEL, so, providers=["CPUExecutionProvider"])
+
+
+def main():
+    out_dir = os.path.join(sys.argv[1], "detect")
+    sess = make_session()
     failed = []
     for path in sys.argv[2:]:
         try:

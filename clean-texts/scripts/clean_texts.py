@@ -21,12 +21,23 @@ never modified; an existing result is skipped unless --force.
 One image = one generation = credits spent (`--cost` asks the price, `--dry-run`
 prints the prompt and the plan, both spend nothing).
 
+`--backend local` spends nothing: manga-translator-ptbr's text detector finds
+the text, fills it with the exact background colour where that is one plain
+colour (balloons, caption boxes) and redraws the art behind the rest with a
+local Qwen-Image-Edit through ComfyUI (`--inpaint qwen`, the default; LaMa
+when ComfyUI is unreachable or with `--inpaint lama`). Only detected text
+pixels change. It erases what the detector finds — every language at once
+(no --language/--keep/--fix) and it can miss stylised titles or sound
+effects that the Higgsfield backend would erase.
+
 Usage:
   clean_texts.py <image-or-folder>... [--language LANG] [--keep "what stays"]
                  [--fix "what the last try got wrong"] [--output PATH] [--force]
                  [--model gpt_image_2_5] [--quality low] [--resolution 2k]
                  [--no-restore] [--restore-threshold 48] [--reuse-raw]
                  [--drop-region N [N ...]] [--cost] [--dry-run]
+  clean_texts.py <image-or-folder>... --backend local [--inpaint qwen|lama]
+                 [--output PATH] [--force] [--dry-run]
 
   --language  erase ONLY the text written in this language (e.g. Japanese);
               text in any other language stays, letter by letter.
@@ -65,6 +76,7 @@ ASPECTS = ["1:1", "3:2", "2:3", "4:3", "3:4", "16:9", "9:16", "21:9", "27:16", "
            "9:8", "8:9", "4:5", "5:4"]
 UPLOAD_MAX_SIDE = 3072
 WORK_DIR = "clean-texts-work"
+TRANSLATOR_SCRIPTS = Path(__file__).resolve().parents[2] / "manga-translator-ptbr" / "scripts"
 MASK_SIDE = 1536        # restore mask is computed at this long side
 LOW_THR = 16            # local-density change (0-255) that counts as "changed"
 SEED_THR = 48           # ...and a changed region needs a peak above this to be erased text
@@ -351,6 +363,31 @@ def clean_one(src: Path, dst: Path, prompt: str, a: argparse.Namespace) -> None:
     print(f"{dst}  ({w}x{h}, {closest_aspect(w, h)[0]}, {note})")
 
 
+def clean_local(src: Path, dst: Path, detect_session) -> None:
+    """Detector + exact fills + local inpainting (see --backend local)."""
+    import detect_text
+    orig, alpha = load_rgb(src)
+    h, w = orig.shape[:2]
+    work = dst.parent / WORK_DIR
+    work.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix="clean-texts-") as tmp:
+        flat = Path(tmp) / f"{dst.stem}.png"          # transparency flattened on white, like the model backend
+        Image.fromarray(orig).save(flat)
+        detect_text.detect_page(detect_session, str(flat), str(work))
+    info = json.loads((work / f"{dst.stem}_detect.json").read_text())
+    result = Image.open(work / f"{dst.stem}_cleaned.png").convert("RGB")
+    if alpha is not None:
+        result.putalpha(Image.fromarray(alpha))
+    result.save(dst)
+    comps = info["components"]
+    note = (f"{sum(c['method'] == 'fill' for c in comps)} plain fill + "
+            f"{sum(c['method'] == 'inpaint' for c in comps)} {info['inpaint_method']} components; "
+            f"what was touched: {work / (dst.stem + '_overlay.jpg')}")
+    if not comps:
+        note += " — WARNING: no text detected, the result is the original"
+    print(f"{dst}  ({w}x{h}, {note})")
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("sources", nargs="+", help="image file(s) and/or folder(s) (folders are not recursed)")
@@ -368,7 +405,17 @@ def main() -> None:
     ap.add_argument("--drop-region", type=int, nargs="+", default=[], metavar="N")
     ap.add_argument("--cost", action="store_true")
     ap.add_argument("--dry-run", action="store_true")
+    ap.add_argument("--backend", default="higgsfield", choices=["higgsfield", "local"])
+    ap.add_argument("--inpaint", default="qwen", choices=["qwen", "lama"],
+                    help="--backend local: what redraws the art behind text (default qwen)")
     a = ap.parse_args()
+    if a.backend == "local":
+        bad = [f for f, v in (("--language", a.language), ("--keep", a.keep), ("--fix", a.fix),
+                              ("--reuse-raw", a.reuse_raw), ("--drop-region", a.drop_region),
+                              ("--no-restore", a.no_restore), ("--cost", a.cost)) if v]
+        if bad:
+            ap.error(f"{', '.join(bad)}: Higgsfield backend only")
+        return main_local(a)
 
     prompt = build_prompt(a.language, a.keep, a.fix)
     jobs = plan_outputs(a.sources, a.output)
@@ -398,6 +445,33 @@ def main() -> None:
         if not a.cost:
             d.parent.mkdir(parents=True, exist_ok=True)
         clean_one(s, d, prompt, a)
+
+
+def main_local(a: argparse.Namespace) -> None:
+    jobs = plan_outputs(a.sources, a.output)
+    if not jobs:
+        sys.exit("ERROR no images found")
+    todo = [(s, d) for s, d in jobs if a.force or not d.exists()]
+    for s, d in jobs:
+        if (s, d) not in todo:
+            print(f"skip (exists, --force to redo): {d}")
+    if a.dry_run:
+        print(f"# backend: local   inpaint: {a.inpaint}   images: {len(todo)} of {len(jobs)}")
+        for s, d in todo:
+            print(f"#   {s}  ->  {d}")
+        return
+    os.environ["INPAINT"] = a.inpaint           # read by manga-translator-ptbr's inpaint_lama
+    sys.path.insert(0, str(TRANSLATOR_SCRIPTS))
+    import detect_text
+    if a.inpaint == "qwen":
+        import inpaint_qwen
+        inpaint_qwen.available()                # starts COMFYUI_SERVICE / warns once, up front
+    sess = detect_text.make_session()
+    for n, (s, d) in enumerate(todo, 1):
+        if len(todo) > 1:
+            print(f"[{n}/{len(todo)}] {s.name}", file=sys.stderr)
+        d.parent.mkdir(parents=True, exist_ok=True)
+        clean_local(s, d, sess)
 
 
 if __name__ == "__main__":

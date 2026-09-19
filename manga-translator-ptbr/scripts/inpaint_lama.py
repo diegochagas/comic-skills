@@ -17,7 +17,9 @@ sampled solid fill they always had.
                                                  # cv2.inpaint otherwise
 
 Model: manga-translator-ptbr/models/lama_fp32.onnx (setup.sh downloads it). Env override:
-INPAINT=telea forces the old OpenCV path.
+INPAINT=telea forces the old OpenCV path; INPAINT=qwen sends the regions to a
+local Qwen-Image-Edit through ComfyUI (inpaint_qwen.py), falling back to LaMa
+when the server is unreachable or the model leaves a region's text in place.
 
 How a region is processed:
   - the mask is grouped into regions (mask dilated by GROUP_PX so the glyphs
@@ -59,6 +61,14 @@ _sess = None
 
 def available():
     return os.environ.get("INPAINT", "").lower() != "telea" and os.path.exists(MODEL)
+
+
+def _qwen():
+    """inpaint_qwen when INPAINT=qwen and its ComfyUI server is usable, else None."""
+    if os.environ.get("INPAINT", "").lower() != "qwen":
+        return None
+    import inpaint_qwen
+    return inpaint_qwen if inpaint_qwen.available() else None
 
 
 def _session():
@@ -207,8 +217,17 @@ def inpaint_lama(img, mask, progress=None, inplace=False, deadline=None, pending
 
 
 def inpaint(img, mask, progress=None, inplace=False, deadline=None, pending=None):
-    """LaMa when the model is present (and INPAINT != telea), else cv2.inpaint.
+    """Qwen with INPAINT=qwen (see inpaint_qwen.py), else LaMa when the model is
+    present (and INPAINT != telea), else cv2.inpaint.
     deadline/pending: see inpaint_lama (ignored by the OpenCV fallback)."""
+    q = _qwen()
+    if q:
+        return q.inpaint(img, mask, progress, inplace, deadline, pending)
+    return lama_or_telea(img, mask, progress, inplace, deadline, pending)
+
+
+def lama_or_telea(img, mask, progress=None, inplace=False, deadline=None, pending=None):
+    """LaMa when the model is present (and INPAINT != telea), else cv2.inpaint."""
     if available():
         return inpaint_lama(img, mask, progress, inplace, deadline, pending)
     if pending is not None:
@@ -221,7 +240,7 @@ def inpaint(img, mask, progress=None, inplace=False, deadline=None, pending=None
 
 
 def method_name():
-    return "lama" if available() else "telea"
+    return "qwen" if _qwen() else "lama" if available() else "telea"
 
 
 if __name__ == "__main__":
