@@ -1,0 +1,9 @@
+{
+  "name": "psd-xcf-convert",
+  "private": true,
+  "description": "Node deps for this skill's .mjs scripts: ag-psd reads Photoshop text layers + layer styles and writes them back.",
+  "type": "module",
+  "dependencies": {
+    "ag-psd": "^31.0.2"
+  }
+}

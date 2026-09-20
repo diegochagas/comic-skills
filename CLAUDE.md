@@ -12,7 +12,9 @@ from the original; the agent QCs each result), `comic-downloader`
 (pattern-based page downloads from JSON site profiles), `psd-sync` (two folders of
 PSDs compared by their art layer: folder 2's copy is replaced only when the
 art was not cropped, and only after Diego approves the dry run),
-`comic-archive`, `pdf-psd-convert`, `image-utils`, `japanese-ocr-translate`
+`psd-xcf-convert` (PSD ⇄ XCF for a file or folder with the text still
+editable: Type layers ⇄ GIMP text layers with the same fonts, Layer Style
+stroke/drop shadow ⇄ Filters > Text Styling), `comic-archive`, `pdf-psd-convert`, `image-utils`, `japanese-ocr-translate`
 (CLI wrappers that pick flags from the request). `.claude/skills/` and
 `.agents/skills/` contain symlinks to those folders; the `higgsfield-*`
 entries there are vendored third-party skills (`skills-lock.json`) — never
@@ -24,7 +26,8 @@ edit them.
   and then runs each `<skill>/setup.sh`, which create the rest of what is
   not committed inside the skills: `manga-translator-ptbr/node_modules/`
   (ag-psd, canvas, pngjs; its package.json is `"type": "module"`),
-  `comic-downloader/node_modules/` (axios), `manga-translator-ptbr/models/`
+  `comic-downloader/node_modules/` (axios), `psd-xcf-convert/node_modules/`
+  (ag-psd only - no canvas), `manga-translator-ptbr/models/`
   (comic-text-detector + LaMa ONNX) and `japanese-ocr-translate/tessdata/`.
   A skill that needs npm packages gets its own `package.json`; the root
   `.gitignore` already ignores any `node_modules/` and `package-lock.json`.
@@ -48,6 +51,19 @@ edit them.
   `qwen` is really a hybrid: flat-screentone regions still go to LaMa
   (`INPAINT_ROUTE=qwen` forces the model everywhere), and anything the model
   misses or fails on falls back to LaMa on its own.
+
+- `psd-xcf-convert` splits the work by who can do it: GIMP's own PSD
+  loader/exporter carries pixels, groups, masks and modes; ag-psd
+  (`psd_text_info.mjs`, `write_psd_text.mjs`) reads and writes what GIMP drops
+  (Type layers, Layer Styles); `gimp_convert_job.py` (headless flatpak GIMP,
+  never with `-f`) builds or describes the text layers and `gegl:styles`
+  filters; `convert.py` maps fonts with `fc-list`. What GIMP cannot store
+  (rotation angle, original Photoshop font name) rides in a layer parasite
+  `psd-xcf-convert`. GIMP traps found here: parasite bytes come back signed
+  (mask with `& 0xFF`), a selection saved in the XCF turns every transform
+  into a floating layer (`Selection.none` after load), selections are clipped
+  to the canvas (measure ink with the layer at 0,0), markup `size=` is
+  1024ths of a point at the image resolution.
 
 - `generate-comic-page` keeps its comic projects OUTSIDE the repo:
   `~/Downloads/<project>/` (`COMIC_PROJECTS_DIR` overrides the root, `-p
