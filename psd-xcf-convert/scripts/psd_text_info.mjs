@@ -45,6 +45,16 @@ function textInfo(layer) {
   const sx = Math.hypot(a, b) || 1, sy = Math.hypot(c, d) || 1;
   const angle = (Math.atan2(b, a) * 180) / Math.PI;
   const base = t.style || {};
+  // A Type layer squeezed or stretched with Free Transform (or Character >
+  // horizontal/vertical scale) has different scales on the two axes. Neither
+  // GIMP nor Pango can set a glyph's width, so the text is sized by the
+  // VERTICAL scale and laid out in a box widened by 1/hscale - same line breaks
+  // as Photoshop - and the finished layer is then squeezed to hscale of its
+  // width (squeezing keeps the pixels sharp; stretching the height would not).
+  const hs = base.horizontalScale ?? 1, vs = base.verticalScale ?? 1;
+  let hscale = (sx * hs) / (sy * vs);
+  if (Math.abs(hscale - 1) < 0.02) hscale = 1;
+  const fs = sy * vs;                                     // font-size factor
   const pstyle = t.paragraphStyle || (t.paragraphStyleRuns && t.paragraphStyleRuns[0] && t.paragraphStyleRuns[0].style) || {};
   // Photoshop: \r = paragraph,  = soft line break
   const full = (t.text || '').replace(/\r\n?|/g, '\n');
@@ -53,7 +63,7 @@ function textInfo(layer) {
     const st = { ...base, ...(s || {}) };
     return {
       font: (st.font && st.font.name) || 'ArialMT',
-      size: round((st.fontSize ?? 12) * sy * (st.verticalScale ?? 1)),
+      size: round((st.fontSize ?? 12) * fs),
       color: hex(st.fillColor),
       bold: !!st.fauxBold,
       italic: !!st.fauxItalic,
@@ -61,7 +71,7 @@ function textInfo(layer) {
       strike: !!st.strikethrough,
       tracking: st.tracking ?? 0,                       // 1/1000 em
       caps: st.fontCaps ?? 0,                           // 1 small caps, 2 all caps
-      leading: st.autoLeading === false && st.leading ? round(st.leading * sy) : null, // null = auto
+      leading: st.autoLeading === false && st.leading ? round(st.leading * fs) : null, // null = auto
     };
   };
   let runs = [];
@@ -83,9 +93,11 @@ function textInfo(layer) {
   const info = {
     shape: t.shapeType === 'box' ? 'box' : 'point',
     angle: round(angle),
+    language: base.language ?? (t.styleRuns && t.styleRuns[0] && t.styleRuns[0].style && t.styleRuns[0].style.language) ?? null, // Adobe code, 11 = Portuguese: Brazilian
+    hscale: round(hscale, 4),                           // 1 = none; box.w and bbox are AFTER the squeeze
     justification: (pstyle.justification || 'left'),
     autoLeading: pstyle.autoLeading ?? 1.2,
-    indent: round((pstyle.firstLineIndent ?? 0) * sx),
+    indent: round((pstyle.firstLineIndent ?? 0) * fs),
     orientation: t.orientation || 'horizontal',
     antiAlias: t.antiAlias !== 'none',
     runs,

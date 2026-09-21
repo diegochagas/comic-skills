@@ -229,6 +229,7 @@ def main() -> int:
     ap.add_argument("--keep-work", action="store_true", help="keep the .work-* folder (job, log, GIMP's raw PSD export) for debugging")
     ap.add_argument("--timeout", type=int, help="seconds per GIMP batch (default 120 + 90 per file)")
     a = ap.parse_args()
+    sys.stdout.reconfigure(line_buffering=True)          # progress per batch even when piped to a log
 
     src = Path(a.source).expanduser().resolve()
     if not src.exists():

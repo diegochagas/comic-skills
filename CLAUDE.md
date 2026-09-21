@@ -58,8 +58,9 @@ edit them.
   (Type layers, Layer Styles); `gimp_convert_job.py` (headless flatpak GIMP,
   never with `-f`) builds or describes the text layers and `gegl:styles`
   filters; `convert.py` maps fonts with `fc-list`. What GIMP cannot store
-  (rotation angle, original Photoshop font name) rides in a layer parasite
-  `psd-xcf-convert`. GIMP traps found here: parasite bytes come back signed
+  (rotation angle, width squeeze of a non-uniformly transformed Type layer,
+  the ink nudge that lines a box up with Photoshop's first line, original
+  Photoshop font name) rides in a layer parasite `psd-xcf-convert`. GIMP traps found here: parasite bytes come back signed
   (mask with `& 0xFF`), a selection saved in the XCF turns every transform
   into a floating layer (`Selection.none` after load), selections are clipped
   to the canvas (measure ink with the layer at 0,0), markup `size=` is

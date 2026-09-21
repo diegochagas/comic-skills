@@ -53,6 +53,7 @@ function textRecord(t) {
     strikethrough: !!r.strike,
     tracking: Math.round(((r.letter_spacing || 0) / (r.size || 1)) * 1000),
     autoLeading: false,
+    ...(t.language != null ? { language: t.language } : {}),   // Adobe code, 11 = Portuguese: Brazilian
     // GIMP: one line spacing per layer, a bigger run just makes its line taller
     leading: r2(t.leading * (r.size / (t.baseSize || r.size))),
   });
@@ -65,10 +66,13 @@ function textRecord(t) {
   // box text = the box's top-left; point text = the first baseline, at the
   // left end / middle / right end of the line depending on the justification
   const u = t.shape === 'box' ? -w / 2 : (just === 'center' ? 0 : just === 'right' ? w / 2 : -w / 2);
+  // a layer squeezed horizontally (Photoshop's non-uniform Free Transform, kept
+  // in the XCF parasite): the transform carries the squeeze, the text space doesn't
+  const k = t.hscale && Math.abs(t.hscale - 1) >= 0.02 ? t.hscale : 1;
   const v = t.shape === 'box' ? -h / 2 : -h / 2 + (t.ascent || base.size * 0.8);
   const rec = {
     text,
-    transform: [cos, sin, -sin, cos, r2(cx + cos * u - sin * v), r2(cy + sin * u + cos * v)].map((n) => Math.round(n * 1e6) / 1e6),
+    transform: [cos * k, sin * k, -sin, cos, r2(cx + cos * u - sin * v), r2(cy + sin * u + cos * v)].map((n) => Math.round(n * 1e6) / 1e6),
     antiAlias: 'smooth',
     orientation: 'horizontal',
     shapeType: t.shape === 'box' ? 'box' : 'point',
@@ -76,7 +80,7 @@ function textRecord(t) {
     paragraphStyle: { justification: just, firstLineIndent: t.indent || 0 },
   };
   if (t.shape === 'box') {
-    Object.assign(rec, { left: 0, top: 0, right: r2(w), bottom: r2(h), boxBounds: [0, 0, r2(w), r2(h)] });
+    Object.assign(rec, { left: 0, top: 0, right: r2(w / k), bottom: r2(h), boxBounds: [0, 0, r2(w / k), r2(h)] });
   } else {
     rec.pointBase = [0, 0];
   }

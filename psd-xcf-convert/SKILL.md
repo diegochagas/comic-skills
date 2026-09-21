@@ -25,12 +25,14 @@ python3 <repo>/psd-xcf-convert/scripts/convert.py "<file or folder>" [flags]
 
 | Photoshop | GIMP | Notes |
 | --- | --- | --- |
-| Type layer, paragraph (box) text | text layer, fixed box | same box, GIMP wraps inside it |
+| Type layer, paragraph (box) text | text layer, fixed box | same box, GIMP wraps inside it; GIMP starts the first line 5-15 px lower than Photoshop (the two read a font's ascent differently), so the box is nudged until the ink sits where Photoshop drew it - the nudge is stored and undone on the way back |
 | Type layer, point text | text layer, dynamic | placed so the ink lands where Photoshop drew it |
 | font (PostScript name) | font (`Family Style`) | matched through fontconfig, see Fonts |
 | size × the layer's transform scale, colour, justification, tracking, leading, first-line indent | font size (px), colour, justify, letter spacing, line spacing, indent | |
+| text language (Character panel, e.g. Portuguese: Brazilian = Adobe code 11) | text layer language (`pt-br`) + the exact code in the parasite | comes back unchanged; a GIMP-made XCF maps its layer language (`pt-br` → 11, `pt` → 10, `en-us` → 0) |
 | style runs (other font / size / colour, faux bold/italic, underline, strikethrough) | Pango markup on the text layer | bold/italic of a family with a real cut use that cut (`CCWildWords-BoldItalic`), faux otherwise |
 | All Caps / Small Caps | the text itself in capitals | GIMP has no caps attribute |
+| Type layer squeezed/stretched with Free Transform, or Character horizontal/vertical scale (SFX, tall titles) | text laid out at full height in a wider box, then the layer's width scaled to the same ratio | same line breaks and shape as Photoshop; like a rotation, editing the text in GIMP re-renders it unsqueezed (the `note:` gives the factor for the Scale tool) |
 | rotated text | text layer rotated the same angle | GIMP flags a rotated text layer as modified: editing its text re-renders it unrotated, rotate again after editing |
 | Layer Style **Stroke** | Filters > Text Styling (`gegl:styles`): Enable Outline, grow radius = stroke size, outline colour + opacity | on text AND on any other layer; the filter stays editable (non-destructive) |
 | Layer Style **Drop Shadow** (or Outer Glow) | same filter: shadow/glow opacity, X/Y, colour, blur, grow | angle + distance ⇄ X/Y |
@@ -46,7 +48,8 @@ flattened image stored in the PSD (what file managers, psd-tools and
 `psd_to_jpg.py` show) is GIMP's full render, outlines and shadows included.
 
 A layer parasite `psd-xcf-convert` inside the XCF remembers what GIMP cannot
-store (the rotation angle, the Photoshop name of a substituted font), so a
+store (the rotation angle, the width squeeze, the ink nudge of a box, the
+Photoshop name of a substituted font), so a
 PSD → XCF → PSD trip comes back with its own fonts, boxes and angles (text
 origin within ~1 px).
 
@@ -92,6 +95,8 @@ only has to exist where Photoshop runs — a missing one shows Photoshop's usual
    stroke position other than Outside, a text layer that was scaled or freely
    rotated in GIMP (its angle is not stored anywhere: kept as pixels, not
    text; quarter turns ARE recognized), vertical text (becomes horizontal).
+   A `width scaled to N%` note is informational: the layer looks like the
+   source, it just re-renders at full width if its text is edited in GIMP.
 3. With `--preview`, look at one or two `_preview/*.jpg` next to the source
    (for a PSD: `pdf-psd-convert/scripts/psd_to_jpg.py`) when the notes mention
    fonts or text — a substituted font wraps differently.
@@ -102,11 +107,25 @@ only has to exist where Photoshop runs — a missing one shows Photoshop's usual
 Exit status 0 = every file converted, 2 = at least one failed (its partial
 output is removed; the rest of the batch still runs).
 
+## Before converting a folder: are the fonts installed?
+
+A font that is missing on this machine is the one thing that visibly changes
+a page (thin Noto Sans instead of a heavy title face). The `note:` lines name
+every missing font; install it (`~/.local/share/fonts`, then `fc-cache -f`;
+Diego also keeps a copy in `linux-mint-setup/steps/fonts/fonts/`) and rerun
+just those pages with `--overwrite --output "<same folder>"`. A GIMP that is
+already open does not see a newly installed font until it is restarted.
+
 ## Limits worth knowing
 
 - Text is re-rendered by the other program, so line breaks inside a box can
   move by a word when the font metrics differ (always the case with a
-  substituted font). The box itself is identical.
+  substituted font), and GIMP does not hyphenate where Photoshop did
+  (`TECNO-LOGIA`), so a narrow caption can take one line more. GIMP clips
+  what does not fit a box: PSD → XCF makes such a box taller (a `note:` says
+  by how much) so no line disappears - only for text Photoshop really rendered
+  and only by a line or two; an unlettered placeholder that overflows its
+  balloon-sized box overflows in Photoshop too and keeps its box.
 - One stroke, one shadow per layer. Photoshop's extra strokes, inner
   shadow/glow, bevel, satin, gradient and pattern overlays are reported and
   skipped; Text Styling's bevel, inner glow and image overlay likewise.

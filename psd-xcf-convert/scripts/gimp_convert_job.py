@@ -124,6 +124,18 @@ def line_height(font, size):
     return h2 - h1, asc
 
 
+# Photoshop's text language (Adobe text engine code) <-> GIMP's text-layer language
+PS_LANGUAGE = {0: "en-us", 14: "en-gb", 10: "pt", 11: "pt-br", 12: "es", 2: "fr", 7: "it"}
+
+
+def ps_language(layer, ours):
+    if ours.get("language") is not None:
+        return ours["language"]                                  # what the PSD had
+    lang = (layer.get_language() or "").lower().replace("_", "-")
+    back = {v: k for k, v in PS_LANGUAGE.items()}
+    return back.get(lang, back.get(lang.split("-")[0]))          # None = leave Photoshop's default
+
+
 JUSTIFY = {"left": Gimp.TextJustification.LEFT, "right": Gimp.TextJustification.RIGHT,
            "center": Gimp.TextJustification.CENTER}
 JUSTIFY_BACK = {int(Gimp.TextJustification.LEFT): "left", int(Gimp.TextJustification.RIGHT): "right",
@@ -233,6 +245,8 @@ def make_text_layer(image, task, entry, raster, notes):
         layer.set_line_spacing(round(leading - natural, 2))
     if t.get("indent"):
         layer.set_indent(t["indent"])
+    if t.get("language") in PS_LANGUAGE:
+        layer.set_language(PS_LANGUAGE[t["language"]])
 
     def style_key(r):
         return (r["font"], round(r["size"], 2), r["color"], r.get("bold"), r.get("italic"),
@@ -241,13 +255,67 @@ def make_text_layer(image, task, entry, raster, notes):
         layer.set_markup(build_markup(runs, base, fonts, yres))
 
     angle = float(t.get("angle") or 0)
+    hscale = float(t.get("hscale") or 1)
+    shift = [0, 0]
+
+    def squeezed(layer):
+        # Photoshop's non-uniform Free Transform: the text was laid out at full
+        # height in a wider box, the finished layer is squeezed to its real
+        # width. Like a rotation, GIMP keeps it a text layer flagged as modified.
+        if abs(hscale - 1) < 0.02:
+            return layer
+        notes.add(f'"{entry["name"]}": width scaled to {hscale * 100:.0f}% like in Photoshop - editing the text in GIMP '
+                  f're-renders it at full width (Scale tool, width x{hscale:.2f}, to redo it)')
+        layer.scale(max(1, round(layer.get_width() * hscale)), layer.get_height(), True)
+        return layer
+
     if t["shape"] == "box":
         w, h = max(1, round(t["box"]["w"])), max(1, round(t["box"]["h"]))
-        layer.resize(w, h)                                   # = fixed box: GIMP wraps the text inside it
+        bw = max(1, round(w / hscale))
+        layer.resize(bw, h)                                  # = fixed box: GIMP wraps the text inside it
+        # GIMP clips what does not fit the box, and it can need a line more than
+        # Photoshop did (no hyphenation, other metrics): measure the text in a
+        # much taller box and, if it runs past the bottom, keep a box that fits.
+        # Only for a box Photoshop really rendered (its layer has pixels) and only
+        # for a line or two: a placeholder that overflows its balloon-sized box
+        # overflows in Photoshop as well, and that box is the balloon - keep it.
+        rendered = entry["bbox"][2] > entry["bbox"][0] and entry["bbox"][3] > entry["bbox"][1]
+        if abs(angle) < 0.5 and rendered:
+            tall = min(max(h * 4, h + 8 * round(size)), max(h, image.get_height()))
+            layer.resize(bw, tall)
+            ink = ink_bounds(image, layer)
+            need = (ink[3] + round(size * 0.25)) if ink else 0
+            if h < need <= h + 2.5 * max(natural, leading) + size * 0.25:
+                notes.add(f'"{entry["name"]}": the text needs more room in GIMP than in Photoshop - '
+                          f'box made {need - h}px taller so the last line is not clipped')
+                layer.resize(bw, need)
+            else:
+                layer.resize(bw, h)
+        layer = squeezed(layer)
         layer.set_offsets(round(t["box"]["cx"] - w / 2), round(t["box"]["cy"] - h / 2))
         layer = rotate_layer(layer, angle)
+        # Same box, but GIMP starts the first line lower than Photoshop (the two
+        # read a font's ascent differently, 5-15 px on comic fonts): nudge the box
+        # so the INK sits where Photoshop drew it. Only when both renderings are
+        # clearly the same lines (similar ink size) or, unrotated, by the top edge;
+        # the nudge is remembered so the way back to PSD restores the real box.
+        l, tp, r, b = entry["bbox"]
+        ox, oy = layer.get_offsets()[1:]
+        ink = ink_bounds(image, layer)                       # parks the layer at 0,0
+        if ink and r > l and b > tp:
+            iw, ih = ink[2] - ink[0], ink[3] - ink[1]
+            same_w, same_h = abs(iw - (r - l)) <= 0.12 * (r - l), abs(ih - (b - tp)) <= 0.12 * (b - tp)
+            dx = (l + r) / 2 - (ox + (ink[0] + ink[2]) / 2) if same_w else 0
+            if same_h:
+                dy = (tp + b) / 2 - (oy + (ink[1] + ink[3]) / 2)
+            else:
+                dy = tp - (oy + ink[1]) if abs(angle) < 0.5 else 0
+            limit = 0.6 * size
+            if abs(dx) <= limit and abs(dy) <= limit:
+                shift = [round(dx), round(dy)]
+        layer.set_offsets(ox + shift[0], oy + shift[1])
     else:
-        layer = rotate_layer(layer, angle)
+        layer = rotate_layer(squeezed(layer), angle)
         # point text: GIMP and Photoshop measure lines differently, so put the
         # INK of the new layer where the ink of Photoshop's rendering is
         l, tp, r, b = entry["bbox"]
@@ -267,7 +335,7 @@ def make_text_layer(image, task, entry, raster, notes):
     layer.set_color_tag(raster.get_color_tag())
     if raster.get_mask() is not None:
         notes.add(f'"{entry["name"]}": the layer mask of this text layer was not carried over')
-    set_parasite_json(layer, {"angle": angle, "shape": t["shape"], "justification": just,
+    set_parasite_json(layer, {"angle": angle, "hscale": hscale, "shift": shift, "language": t.get("language"), "shape": t["shape"], "justification": just,
                               "fonts": {fonts[k]: k for k in fonts}})
     if task.get("keep_raster"):
         raster.set_visible(False)
@@ -516,6 +584,8 @@ def describe_text(image, layer, notes):
     ox, oy = layer.get_offsets()[1:]
     w, h = layer.get_width(), layer.get_height()
     cx, cy = ox + w / 2.0, oy + h / 2.0
+    if fixed and ours.get("shift"):
+        cx, cy = cx - ours["shift"][0], cy - ours["shift"][1]    # the PSD->XCF ink nudge, see make_text_layer
     quarter = abs(round(angle)) % 180 == 90 and abs(angle - round(angle)) < 0.5
     if fixed or "angle" not in ours:
         bw, bh = (h, w) if quarter else (w, h)
@@ -523,8 +593,13 @@ def describe_text(image, layer, notes):
             bw, bh = nat_w, nat_h                                # free rotation: layer bounds grew, box did not
     else:
         bw, bh = nat_w, nat_h
+    hscale = float(ours.get("hscale") or 1)
+    if abs(hscale - 1) >= 0.02:
+        bw, bh = nat_w * hscale, nat_h                           # the text's own box, squeezed like the layer was
 
     info = {
+        "hscale": hscale,
+        "language": ps_language(layer, ours),
         "shape": "box" if fixed else "point",
         "angle": angle,
         "box": {"w": bw, "h": bh, "cx": cx, "cy": cy},           # unrotated size + page centre, both shapes
