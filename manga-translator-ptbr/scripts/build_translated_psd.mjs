@@ -63,6 +63,10 @@ const PLACEHOLDER = PH_IDX === -1 ? null
   : (args[PH_IDX + 1] && !args[PH_IDX + 1].startsWith('--') && !pos.includes(args[PH_IDX + 1])
       ? args[PH_IDX + 1] : 'Lorem ipsum dolor sit amet, consectetur adipiscing elit.');
 const MIN_FONT = 8;
+// Photoshop's text language (Character panel; drives spell check and
+// hyphenation): Adobe text engine code 11 = "Portuguese: Brazilian" (10 =
+// Portuguese, 0 = English: USA, which is what a layer gets when it is unset).
+const LANGUAGE_PT_BR = 11;
 // placeholder boxes: box height / 7 lines, clamped (same heuristic the old
 // lettering pipeline used) - auto-fit would blow Lorem ipsum up to fill the box
 const placeholderSize = (h) => Math.max(10, Math.min(32, Math.round(h / 7)));
@@ -178,7 +182,7 @@ async function main() {
         antiAlias: 'smooth',
         shapeType: 'box',
         boxBounds: [0, 0, bw, bh],
-        style: { font: { name: st.font || FONT_NAME }, fontSize: size, fillColor: color },
+        style: { font: { name: st.font || FONT_NAME }, fontSize: size, fillColor: color, language: LANGUAGE_PT_BR },
         paragraphStyle: { justification: st.align || 'center' },
       },
     });

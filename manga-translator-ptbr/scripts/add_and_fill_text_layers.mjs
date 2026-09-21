@@ -30,6 +30,11 @@ const FONT = { name: 'CCWildWords-Regular' };
 const MIN_FONT_SIZE = 10;
 const MAX_FONT_SIZE = 32;
 const LINES_PER_BOX = 7;
+// Photoshop's text language (Character panel; drives spell check and
+// hyphenation): Adobe text engine code 11 = "Portuguese: Brazilian" (10 =
+// Portuguese, 0 = English: USA, which is what a layer gets when it is unset).
+const LANGUAGE_PT_BR = 11;
+
 function fontSizeFor(_w, h) {
   return Math.max(MIN_FONT_SIZE, Math.min(MAX_FONT_SIZE, Math.round(h / LINES_PER_BOX)));
 }
@@ -71,6 +76,7 @@ for (const [i, [x, y, w, h]] of blocks.entries()) {
         font: FONT,
         fontSize: fontSizeFor(w, h),
         fillColor: { r: 0, g: 0, b: 0 },
+        language: LANGUAGE_PT_BR,
       },
       paragraphStyle: { justification: 'center' },
     },

@@ -89,6 +89,13 @@ python3 manga-translator-ptbr/scripts/build_translated_xcf.py <src> <blocks.json
 python3 manga-translator-ptbr/scripts/build_translated_xcf.py --job <pages.json>     # batch: list of {source, blocks, out, copy_image, placeholder, preview}
 ```
 
+PSD specifics: every text box the skill writes or fills
+(`build_translated_psd.mjs`, `build_two_source_psd.mjs`,
+`add_and_fill_text_layers.mjs`, `set_text_layers.mjs`) has its text language
+set to **Portuguese: Brazilian** (Adobe text engine code 11, the same value
+Diego's own Photoshop stores), so Photoshop spell-checks and hyphenates the
+lettering as PT-BR instead of the default English: USA.
+
 XCF specifics: each box is a GIMP text layer in fixed-box (paragraph) mode
 with the block's font, size, colour and justification; `rotate` is applied
 as a lossless 90/180-degree transform (GIMP keeps it a text layer but flags
