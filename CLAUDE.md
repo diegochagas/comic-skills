@@ -14,7 +14,11 @@ PSDs compared by their art layer: folder 2's copy is replaced only when the
 art was not cropped, and only after Diego approves the dry run),
 `psd-xcf-convert` (PSD ⇄ XCF for a file or folder with the text still
 editable: Type layers ⇄ GIMP text layers with the same fonts, Layer Style
-stroke/drop shadow ⇄ Filters > Text Styling), `comic-archive`, `pdf-psd-convert`, `image-utils`, `japanese-ocr-translate`
+stroke/drop shadow ⇄ Filters > Text Styling), `describe-pages` (a local
+vision model in Ollama describes every page under a folder into a named set
+in `~/Downloads/<name> descriptions/`), `find-pages` (searches such a set and returns the
+paths of the pages that show something; the agent verifies the top hits by
+looking at them), `comic-archive`, `pdf-psd-convert`, `image-utils`, `japanese-ocr-translate`
 (CLI wrappers that pick flags from the request). `.claude/skills/` and
 `.agents/skills/` contain symlinks to those folders; the `higgsfield-*`
 entries there are vendored third-party skills (`skills-lock.json`) — never
@@ -104,6 +108,11 @@ edit them.
   `generate-comic-page` projects), plus an `--output` / `OUT=` override.
   Scripts never modify their input files. New scripts follow the same rule;
   the README's "Rules" table lists each skill's default location.
+
+- `describe-pages` writes `~/Downloads/<name> descriptions/` (same
+  `COMIC_OUTPUT_DIR` rule); `find-pages` looks sets up by that name and
+  writes nothing. Only Ollama (`qwen3-vl:4b`, pulled by its `setup.sh`) — no
+  cloud model, and the source folder is read-only.
 
 - `psd-sync` is the exception to "never touch the input": it trashes and
   moves the very files it is pointed at. It runs as a dry run first, Diego

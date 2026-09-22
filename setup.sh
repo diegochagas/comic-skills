@@ -14,6 +14,7 @@ if [ ! -d venv ]; then
 fi
 # manga-translator-ptbr: onnxruntime opencv numpy pillow | pdf-psd-convert: pymupdf psd-tools pillow
 # japanese-ocr-translate: pillow deep-translator | generate-comic-page, clean-texts: pillow opencv numpy | image-utils, comic-archive: pillow
+# describe-pages: pillow (the model comes from describe-pages/setup.sh via ollama) | find-pages: stdlib only
 venv/bin/pip install --quiet onnxruntime opencv-python-headless numpy \
     pillow pymupdf "psd-tools[composite]" deep-translator
 echo "venv ready: $(venv/bin/python -c 'import onnxruntime; print("onnxruntime", onnxruntime.__version__)')"
