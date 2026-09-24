@@ -14,7 +14,10 @@ PSDs compared by their art layer: folder 2's copy is replaced only when the
 art was not cropped, and only after Diego approves the dry run),
 `psd-xcf-convert` (PSD ⇄ XCF for a file or folder with the text still
 editable: Type layers ⇄ GIMP text layers with the same fonts, Layer Style
-stroke/drop shadow ⇄ Filters > Text Styling), `describe-pages` (a local
+stroke/drop shadow ⇄ Filters > Text Styling), `docx-odt-convert` (Word
+.docx ⇄ LibreOffice .odt through a headless LibreOffice, table of contents
+updated with page numbers; run with the system `python3`, which has `uno`),
+`describe-pages` (a local
 vision model in Ollama describes every page under a folder into a named set
 in `~/Downloads/<name> descriptions/`), `find-pages` (searches such a set and returns the
 paths of the pages that show something; the agent verifies the top hits by

@@ -50,6 +50,7 @@ the repo root.
 | [`pdf-psd-convert`](pdf-psd-convert/) | `pdf_to_images.py`, `psd_to_jpg.py` | PDF pages → JPG at any DPI (one folder per PDF or one shared folder); `.psd`/`.psb` → JPG recursively, keeping folder structure, with matte color and an optional all-layers-visible render. |
 | [`psd-sync`](psd-sync/) | `sync_psds.py` | Compares the same-named PSDs of two folders by their art layer (bottom-most pixel layer covering the canvas, `Original` in Diego's files) and replaces folder 2's copy with folder 1's — old copy to the trash, new file moved in — only where the artwork was **not** cropped. Pages whose art was cut on any side (with or without a resize afterwards, found down to half a side and reported in pixels) stay where they are in both folders. Dry run by default; `--apply` is the only thing that moves anything. |
 | [`psd-xcf-convert`](psd-xcf-convert/) | `convert.py`, `psd_text_info.mjs`, `gimp_convert_job.py`, `write_psd_text.mjs` | Photoshop PSD ⇄ GIMP XCF for a file or a folder (a folder with both kinds converts each file to the other format) with the text still **editable**: Type layers ⇄ native GIMP text layers — same font (PostScript name ⇄ `Family Style` through fontconfig, missing fonts substituted and reported), size, colour, justification, leading, tracking, paragraph box or point text, rotation, mixed bold/italic/colour runs — and the text outline both ways: GIMP's Filters > Text Styling (`gegl:styles`) outline/shadow ⇄ Photoshop's live Layer Styles Stroke/Drop Shadow, on text and on any other layer. Pixels, groups, masks, blend modes and opacity travel through GIMP's own PSD import/export (headless GIMP, one start per 15 files); ag-psd reads and writes the Type layers and Layer Styles. A PSD → XCF → PSD trip comes back with its own fonts, boxes and angles. |
+| [`docx-odt-convert`](docx-odt-convert/) | `convert.py` | Word `.docx`/`.doc` ⇄ LibreOffice `.odt` for a file or a folder through a private headless LibreOffice, with the **table of contents updated** (every entry with its page number; a generated `.docx` only has an empty TOC field) and `Heading N` styles given their outline levels (without them LibreOffice's TOC stays empty); optional removal of hint paragraphs; new folder in `~/Downloads`, or `--in-place --trash` to switch a document library over. |
 | [`describe-pages`](describe-pages/) | `describe_pages.py` | Describes every page image under a folder (recursive) with a local vision model in Ollama (Qwen3-VL 4B, `qwen3-vl:4b`, free, offline, ~5 s/page; see "Local models" below): page type, summary, the objects drawn, characters, setting, what the text is about. Saved as a named set in `~/Downloads/<name> descriptions/` (`pages.jsonl` + `index.json`), resumable, source never touched. |
 | [`find-pages`](find-pages/) | `find_pages.py` | Searches a describe-pages set for one or more terms ("computer", "boy with goggles"; AND, `--any`, `--type cover`, `--field objects`) and prints the paths of the original page images, ranked, with the matching text (`--show`); the agent verifies the top hits against the images before reporting. |
 | [`image-utils`](image-utils/) | `rotate_images.py`, `stretch_pngs.py` | Rotate every image in a folder in place by N degrees; stretch every PNG to exact W×H into `output/`. |
@@ -74,7 +75,7 @@ this repo. To use them from anywhere, symlink the skill folders into the
 global directories, the same way:
 
 ```sh
-for s in generate-comic-page manga-translator-ptbr clean-texts comic-downloader comic-archive pdf-psd-convert psd-sync psd-xcf-convert describe-pages find-pages image-utils japanese-ocr-translate; do
+for s in generate-comic-page manga-translator-ptbr clean-texts comic-downloader comic-archive pdf-psd-convert psd-sync psd-xcf-convert docx-odt-convert describe-pages find-pages image-utils japanese-ocr-translate; do
   for h in ~/.claude/skills ~/.agents/skills ~/.codex/skills; do
     mkdir -p "$h" && ln -sfn ~/Projects/comic-skills/$s "$h/$s"
   done
@@ -134,6 +135,8 @@ System requirements, by skill:
 - `psd-xcf-convert`: Node.js + npm, flatpak GIMP 3, fontconfig (`fc-list`);
   the fonts of the files installed where they are opened (missing ones are
   substituted and reported).
+- `docx-odt-convert`: LibreOffice (`soffice`) and `python3-uno` (the system
+  `python3`, not the venv); `gio` for `--trash`.
 - `comic-downloader`: Node.js only.
 - `clean-texts`: the Higgsfield CLI logged in (same account as below).
 - `generate-comic-page`: the Higgsfield CLI logged in to a Higgsfield account
@@ -169,6 +172,7 @@ place.
 | `pdf-psd-convert` | `~/Downloads/<folder>/<PdfName>/`; `~/Downloads/<folder> JPG/` |
 | `psd-sync` | nothing by default (it moves files between the two folders it is given); `--json` writes `~/Downloads/<folder1 name>-psd-sync.json` |
 | `psd-xcf-convert` | `~/Downloads/<folder or file name> converted/` (`.xcf` for every PSD, `.psd` for every XCF, `_preview/` with `--preview`) |
+| `docx-odt-convert` | `~/Downloads/<folder or file name> converted/` (`.odt` for every `.docx`/`.doc`, `.docx` for every `.odt`); with `--in-place`, next to each source |
 | `describe-pages` | `~/Downloads/<name> descriptions/` (`pages.jsonl`, `index.json`; `<name>` = slug of the source's last two path parts) |
 | `find-pages` | nothing written; prints paths of the original images |
 | `image-utils` | `~/Downloads/<folder> rotated <deg>/`, `~/Downloads/<folder> <W>x<H>/` |
