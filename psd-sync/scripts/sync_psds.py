@@ -246,6 +246,43 @@ def replace(src, dst):
     return used
 
 
+def unique_dest(out_dir, name):
+    """`out_dir / name`, or a `name (1).psd`-style variant if that's taken."""
+    dest = out_dir / name
+    if not dest.exists():
+        return dest
+    stem, suffix = Path(name).stem, Path(name).suffix
+    i = 1
+    while True:
+        dest = out_dir / f"{stem} ({i}){suffix}"
+        if not dest.exists():
+            return dest
+        i += 1
+
+
+def move_leftovers(src_dir, out_dir):
+    """Move every .psd still in src_dir (kept pages, failed applies) to out_dir."""
+    out_dir.mkdir(parents=True, exist_ok=True)
+    moved = []
+    for p in sorted(src_dir.iterdir()):
+        if p.is_file() and p.suffix.lower() == ".psd":
+            dest = unique_dest(out_dir, p.name)
+            shutil.move(str(p), str(dest))
+            moved.append((p.name, dest))
+    return moved
+
+
+def trash_source_if_empty(src_dir):
+    """If src_dir has nothing left in it, trash it - or its parent, when src_dir
+    is that parent's only entry (the common "Name/Name/" download wrapper)."""
+    if any(src_dir.iterdir()):
+        return None, None
+    parent = src_dir.resolve().parent
+    siblings = list(parent.iterdir())
+    target = parent if len(siblings) == 1 and siblings[0].resolve() == src_dir.resolve() else src_dir
+    return target, trash(target)
+
+
 # ----------------------------------------------------------------------- main
 MOVE = {"identical", "same_framing"}
 
@@ -302,6 +339,10 @@ def main():
     to_move = [r for r in rows if r["action"] == "replace"]
     print(f"\n{len(rows)} file(s): {len(to_move)} to replace, {len(rows) - len(to_move)} kept as they are")
 
+    out_root = Path(os.environ.get("COMIC_OUTPUT_DIR") or Path.home() / "Downloads")
+    leftovers_moved = []
+    source_trashed = None
+
     if args.apply:
         print()
         for row in to_move:
@@ -314,17 +355,36 @@ def main():
                 row["applied"] = f"FAILED: {exc}"
                 row["action"] = "keep"
                 print(f"{row['file']:<24} FAILED: {exc}")
+
+        if not args.only:
+            leftovers_moved = move_leftovers(src_dir, out_root)
+            if leftovers_moved:
+                print()
+                for name, dest in leftovers_moved:
+                    print(f"{name:<24} leftover -> moved to {dest}")
+            target, used = trash_source_if_empty(src_dir)
+            if target is not None:
+                source_trashed = str(target)
+                print(f"\n{target} trashed ({used}) - folder1 was fully synced")
+            else:
+                remaining = ", ".join(p.name for p in sorted(src_dir.iterdir()))
+                print(f"\nfolder1 not trashed - still has: {remaining}")
     elif to_move:
-        print("dry run - nothing was moved; re-run with --apply to replace those files")
+        note = (f"; the {len(rows) - len(to_move)} kept file(s) would move to {out_root} "
+                f"and folder1 (or its wrapper) trashed once empty" if len(rows) > len(to_move)
+                else "; folder1 (or its wrapper) would then be trashed, now empty")
+        if args.only:
+            note = ""
+        print(f"dry run - nothing was moved; re-run with --apply to replace those files{note}")
 
     if args.json is not None:
-        out = Path(args.json).expanduser() if args.json else Path(
-            os.environ.get("COMIC_OUTPUT_DIR") or Path.home() / "Downloads"
-        ) / f"{src_dir.name}-psd-sync.json"
+        out = Path(args.json).expanduser() if args.json else out_root / f"{src_dir.name}-psd-sync.json"
         out.parent.mkdir(parents=True, exist_ok=True)
         out.write_text(json.dumps({
             "folder1": str(src_dir), "folder2": str(dst_dir),
             "applied": bool(args.apply),
+            "leftovers_moved": [{"file": n, "to": str(d)} for n, d in leftovers_moved],
+            "source_trashed": source_trashed,
             "generated_at": time.strftime("%Y-%m-%d %H:%M:%S"),
             "files": rows,
         }, indent=2, ensure_ascii=False))

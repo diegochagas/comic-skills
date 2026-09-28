@@ -1,6 +1,6 @@
 ---
 name: psd-sync
-description: Compare the same-named PSDs of two folders by their art layer and replace the copy in the second folder with the one from the first, but only for the pages whose artwork was not cropped - the old copy goes to the trash and the new file takes its place, while every page whose art was cut (left, right, top or bottom, with or without a resize afterwards) is left untouched in both folders for a human to look at. Use when Diego gives two folders of PSDs and asks to "compare these PSDs", "check if they were cut/cropped", "replace the ones that are the same", "compara os PSDs", "move os que não foram cortados", or wants a newer batch of PSDs moved over an older working folder without overwriting a page whose framing changed.
+description: Given folder1 (the new PSDs) and folder2 (the older folder being updated), compare their same-named PSDs by art layer and replace folder2's copy with folder1's, but only for pages whose artwork was not cropped - the old copy goes to the trash and the new file takes its place, while every page whose art was cut (left, right, top or bottom, with or without a resize afterwards) is left untouched in both folders for a human to look at. Use when Diego gives two folders of PSDs and asks to "compare these PSDs", "check if they were cut/cropped", "replace the ones that are the same", "compara os PSDs", "move os que não foram cortados", or wants a newer batch of PSDs moved over an older working folder without overwriting a page whose framing changed.
 ---
 
 # psd-sync — replace PSDs only where the art was not cut
@@ -24,6 +24,10 @@ anything happens.
 
 ## How to run it
 
+0. **Need both folder paths before doing anything else.** If Diego invokes
+   this (including bare `/psd-sync`) without giving folder1 and folder2,
+   ask for both paths and wait for his reply — never guess a folder, and
+   never run the dry run on partial input.
 1. **Dry run first, always.** Without `--apply` nothing is touched; the script
    prints one line per file and the counts.
 2. **Show Diego the result** — how many would be replaced, and the name plus
@@ -37,6 +41,15 @@ anything happens.
 Deleting is always `gio trash` / `trash-put`, never `rm`, so a wrong call is
 undone from the desktop trash. The script refuses to run if folder1 and
 folder2 are the same folder, and it verifies the size of every moved file.
+
+After `--apply` (full runs only — this is skipped when `--only` was used,
+since a partial run never looks at the rest of folder1), any `.psd` still
+physically left in folder1 — kept pages (`cut`/`different`/`no_counterpart`/
+`error`) as well as any page whose apply failed — is moved to `~/Downloads`
+(`COMIC_OUTPUT_DIR` overrides the root) instead of being left behind. If
+folder1 is empty after that, it gets trashed too: its parent as well, when
+folder1 was that parent's only entry (the common `Name/Name/` download-
+extraction wrapper) — but never a parent that has other content in it.
 
 ## What gets compared
 
@@ -93,4 +106,6 @@ Counts first (`N replaced, M kept`), then every kept page with its reason —
 cut sides in pixels, unreadable file, or missing counterpart — and where the
 trashed copies went (desktop trash). If `--apply` fails on a file, that pair
 is left exactly as it was and the failure is reported per file; the rest of
-the batch still runs.
+the batch still runs. Last, on a full (non `--only`) `--apply` run: which
+leftover files moved to `~/Downloads`, and whether folder1 (or its wrapper)
+was trashed or — if something is still inside it — why not.
