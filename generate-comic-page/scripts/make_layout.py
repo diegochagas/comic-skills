@@ -125,6 +125,26 @@ def draw_overlay(img: np.ndarray, balloons: list[dict], dst: Path) -> float:
     return scale
 
 
+def pair_by_panel(art: Path, balloons: list[dict]) -> dict[int, str] | None:
+    """Page assembled from panels (assemble_page.py sidecar): each balloon gets
+    the next line of the panel it sits in, in reading order."""
+    sidecar = art.with_suffix(".panels.json")
+    if not sidecar.exists():
+        return None
+    panels = json.loads(sidecar.read_text(encoding="utf-8"))["panels"]
+    queue = {p["id"]: list(p["dialogue"]) for p in panels}
+    out: dict[int, str] = {}
+    for b in balloons:
+        cx, cy = b["bbox"][0] + b["bbox"][2] / 2, b["bbox"][1] + b["bbox"][3] / 2
+        for p in panels:
+            x, y, w, h = p["box"]
+            if x <= cx < x + w and y <= cy < y + h:
+                if queue[p["id"]]:
+                    out[b["id"]] = queue[p["id"]].pop(0)
+                break
+    return out
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--project", "-p", default=None)
@@ -160,8 +180,16 @@ def main() -> None:
     if kind == "story":
         balloons = detect_balloons(img)
         scale = draw_overlay(img, balloons, ldir / f"{stem}.balloons.jpg")
+        paired = pair_by_panel(art, balloons)
+        if paired is not None:
+            print("panel-mode page: lines paired per panel (panels.json sidecar)")
+            texts = [s for p in json.loads(art.with_suffix(".panels.json").read_text(encoding="utf-8"))["panels"]
+                     for s in p["dialogue"]] or texts
         for b in balloons:
-            text = texts[b["id"] - 1] if b["id"] <= len(texts) else ""
+            if paired is not None:
+                text = paired.get(b["id"], "")
+            else:
+                text = texts[b["id"] - 1] if b["id"] <= len(texts) else ""
             layers.append({"name": f"Balloon {b['id']:02d}", "text": text or "TODO", "box": b["text_box"],
                            "font": font, "color": "#000000", "align": "center", "valign": "middle"})
         print(f"{len(balloons)} balloon(s) detected, {len(texts)} text line(s) in the script"
@@ -169,8 +197,10 @@ def main() -> None:
         for b in balloons:
             print(f"  {b['id']:>2}  {b['shape']:<7} text_box={b['text_box']}")
         print(f"overlay: {ldir / f'{stem}.balloons.jpg'}  (art is {W}x{H}; overlay px / {scale:.3f} = art px)")
-        for extra in texts[len(balloons):]:
-            print(f"  UNPLACED: {extra!r}")
+        placed = set(paired.values()) if paired is not None else set(texts[:len(balloons)])
+        for extra in texts:
+            if extra not in placed:
+                print(f"  UNPLACED: {extra!r}")
     else:
         step = int(H * 0.8 / max(len(texts), 1))
         for i, text in enumerate(texts):

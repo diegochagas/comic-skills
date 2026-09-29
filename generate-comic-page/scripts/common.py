@@ -95,6 +95,18 @@ def character_notes(charmap: dict, page_text: str) -> list[str]:
     return [e["description"] for e in _matching_entries(charmap, page_text) if e.get("description")]
 
 
+def load_scenemap(pdir: Path) -> dict:
+    """scenemap.json: like charmap.json, for LOCATIONS (panel mode). Each entry:
+    keywords, images (files in refs/scenarios/, pages or crops of the ORIGINAL
+    manga found by searching its description set), description, source_pages."""
+    path = pdir / "scenemap.json"
+    return json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
+
+
+def resolve_scenarios(scenemap: dict, text: str) -> list[dict]:
+    return _matching_entries(scenemap, text)
+
+
 def no_sheet_chars(charmap: dict, page_text: str) -> list[str]:
     text = strip_accents(page_text).upper()
     return [c for c in charmap.get("no_sheet_characters", []) if strip_accents(c).upper() in text]

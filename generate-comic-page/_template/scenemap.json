@@ -1,0 +1,4 @@
+{
+  "_comment": "Panel mode only. LOCATIONS: keywords matched like charmap (accent-insensitive uppercase substring of the page/beat text). images: files in refs/scenarios/ — pages or crops of the ORIGINAL manga found by searching its describe-pages set (find_pages.py <set> <words> --field setting) and checked by eye. description: what the agent SAW (terrain, vegetation, architecture, inking) + what the script adds.",
+  "map": []
+}

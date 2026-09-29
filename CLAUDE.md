@@ -84,7 +84,11 @@ edit them.
 - ONE page per turn. Generate, self-QC, show Diego, stop. The next page is
   generated only after he approved the current one AND said yes to the next.
   No batch mode — don't write one.
-- At most 2 generations per turn without Diego seeing a result.
+- At most 2 generations per turn without Diego seeing a result. Panel mode
+  (`"generation": "panels"`): the panels of ONE page per turn, max one fix
+  per panel, then show the assembled page. In panel mode comic pages reach
+  the image model only as describe-pages text; attached images are model
+  sheets and scenarios (found by searching the original manga's set).
 - The image model never writes text. EVERY page is generated textless
   (story pages with empty balloons) and delivered as a GIMP `.xcf` whose
   text is native text layers: `make_layout.py` (OpenCV balloon detection +

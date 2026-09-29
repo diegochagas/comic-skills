@@ -1,6 +1,6 @@
 ---
 name: generate-comic-page
-description: Generate an AI comic ONE page at a time through Higgsfield, with Diego reviewing every page before the next one. EVERY page is delivered as a GIMP .xcf with editable text - story pages are drawn with EMPTY speech balloons and get one native GIMP text box per balloon in the CCWildWords font, and the COVER and the EDITORIAL get their logo/title/body copy as text layers too. Takes a folder of character model-sheet examples the first time, then loops per page - generate, self-QC, show Diego, and on his answer either approve (and ask whether to generate the next page), apply the specific changes he asks for, or import more examples and retry. Use when the user asks to generate/continue/fix a comic page, make the cover or the editorial of an issue, start a new AI comic from model sheets, or says things like "/generate-comic-page megaman-nam 17", "gera a próxima página", "faz a capa da edição 18", "gera o editorial", "continua o quadrinho", "aqui tem mais exemplos do personagem".
+description: Generate an AI comic ONE page at a time through Higgsfield (optionally panel by panel, with comic pages sent as describe-pages text and scenarios found in the original manga's descriptions), with Diego reviewing every page before the next one. EVERY page is delivered as a GIMP .xcf with editable text - story pages are drawn with EMPTY speech balloons and get one native GIMP text box per balloon in the CCWildWords font, and the COVER and the EDITORIAL get their logo/title/body copy as text layers too. Takes a folder of character model-sheet examples the first time, then loops per page - generate, self-QC, show Diego, and on his answer either approve (and ask whether to generate the next page), apply the specific changes he asks for, or import more examples and retry. Use when the user asks to generate/continue/fix a comic page, make the cover or the editorial of an issue, start a new AI comic from model sheets, or says things like "/generate-comic-page megaman-nam 17", "gera a próxima página", "faz a capa da edição 18", "gera o editorial", "continua o quadrinho", "aqui tem mais exemplos do personagem".
 ---
 
 # generate-comic-page
@@ -38,11 +38,14 @@ Comic projects live OUTSIDE the repo, in `~/Downloads/<project>/`
   project.json      formats: issues, script pattern, aspect, language, lettering, page_kinds, cbz naming
   PROJECT.md        this comic's own rules (style, continuity, QC priorities) - read it first
   charmap.json      character keyword -> model sheets + written design description
+  scenemap.json     panel mode: location keyword -> scenario images (original manga) + description
   scripts_src/      one page-by-page script per issue
   refs/model-sheets/   character examples (imported from the folder Diego gives)
   refs/style/          2-4 style anchor pages
+  refs/scenarios/      panel mode: pages/crops of the original manga showing each location
   jobs/<issue>/page_NN.json      one job per page (made by split_scripts.py)
   work/<issue>/gen/              every art attempt (textless): page_NN_tryK.png
+  work/<issue>/panels/page_NN/   panel mode: plan.json + panel_KK_tryT.png (+ .prompt.txt)
   work/<issue>/layout/           page_NN.balloons.jpg (numbered overlay), page_NN.layout.json, page_NN_preview.jpg
   work/<issue>/approved/         the approved lettered page_NN.jpg (what goes in the .cbz)
   work/<issue>/state.json        per-page status
@@ -219,6 +222,77 @@ Record anything worth remembering with `page_state.py ... set --note`.
 Rules that apply to the whole comic (a continuity fact, a recurring failure
 and its fix) go in the project's `PROJECT.md`.
 
+## Panel mode (`"generation": "panels"` in project.json)
+
+The page is not drawn in one generation: **every panel is its own
+generation** and the page is assembled by code. And **comic pages never go
+to the image model as images** — only model sheets and scenarios are
+attached; comic pages travel as the WORDS that `describe-pages` wrote for
+them:
+
+| Goes in as | What |
+| --- | --- |
+| image | model sheets (`charmap.json`), scenario images (`scenemap.json`, `refs/scenarios/`) |
+| words | panel prompt with EMPTY balloons, character design lock, scenario notes, descriptions of the original manga pages picked as staging refs (`source_refs`), descriptions of this comic's earlier panels + previous approved page (continuity, described on demand by describe-pages into `~/Downloads/<project> descriptions/`) |
+
+project.json: `"generation": "panels"`, `"description_sets": {"source":
+"<describe-pages set of the ORIGINAL manga>"}`, `"page_size"`,
+`"page_margin"`, `"panel_gutter"`, `"panel_border"`, `"panel_resolution"`
+(`1k` = 0.25 credit per panel with `gpt_image_2_5` low), and `"panel_style"`
+(the base style written for ONE panel — replaces the issue preamble, which
+usually talks about whole pages).
+
+**Scenarios come from the original manga, found through its descriptions**
+(so backgrounds stay consistent with the original). Per location:
+1. `venv/bin/python find-pages/scripts/find_pages.py <source set> <place words> --field setting --type story --show`
+   (also try objects: `tree`, `building`, `computer`…).
+2. LOOK at the best hits (a contact sheet is quickest); pick pages where the
+   place fills the frame with little lettering and few figures.
+3. `import_refs.py -p P --scenario <page> [--crop x,y,w,h]` — crop to the
+   panel that shows the place.
+4. Add a `scenemap.json` entry: `keywords` (how the scripts name the place,
+   matched like charmap keywords), `images`, `description` (what you SEE:
+   terrain, vegetation, architecture, how it is inked — plus what the script
+   adds, e.g. "pixel-edged leaves"), `source_pages`.
+
+**The page loop in panel mode** (replaces step 1 of the page loop; steps
+2-5 stay):
+1. `plan_panels.py -p P <issue> <page>` drafts
+   `work/<issue>/panels/page_NN/plan.json`: one panel per STORY BEATS bullet,
+   each quoted line replaced by "an EMPTY balloon sized for about N words",
+   that panel's exact `dialogue`, its `scenarios`.
+2. Edit the plan like a manga artist: restage the boxes (wide establishing
+   shot, big reveal, small reaction), rewrite each `prompt` as rich prose
+   (camera, pose, expression, where the balloon goes), and fill
+   `source_refs` with 0-2 original pages per panel found with find-pages
+   (`"lying on the ground" boy`, `"looking up" sky`…). The 4B describer is
+   noisy — skip a hit whose description is mostly about something else.
+   `gen_panel.py ... --dry-run` shows the exact prompt; `--cost` the price.
+3. `gen_panel.py -p P <issue> <page> <panel>` for each panel in order (each
+   one describes the panels before it for continuity — needs Ollama). Read
+   every panel right after it lands. An objective failure (duplicated or
+   missing character, wrong balloon count, letters) gets ONE `--fix` reroll
+   (or `--edit-from <panel png> --instruction "..."`) before showing; set
+   `"chosen"` in the plan to pick an older try.
+4. `assemble_page.py -p P <issue> <page>` composes the chosen tries into
+   `gen/page_NN_tryK.png` (+ `.panels.json` sidecar). Adjust a panel's `box`
+   or `focus` (0..1, which part survives the crop) when a balloon or face is
+   cut, and re-assemble (free). `--preview-only` for a quick look.
+5. `make_layout.py` pairs balloons with lines PER PANEL from the sidecar;
+   then `build_xcf.py` as usual.
+
+Limits in panel mode: all panels of ONE page per turn (not one generation),
+max one fix per panel before Diego sees the page; the page is still
+approved as a whole with `page_state.py approve`.
+
+Field notes (first test, Ryo Saga 1 p5, 2026-09-28): 6 panels + 1 fix = 1.75
+credits; characters and forest stayed on-model; a continuity description of
+the previous panel made the model draw that panel's Agumon AGAIN (fixed with
+an explicit "exactly ONE Agumon" `--fix`); generated balloons come out small
+for long lines — fit the text with per-layer `size` and boxes that follow the
+oval (the auto-fit can overflow narrow boxes); text printed on a model sheet
+(the "RYO" strap) comes back as garbled letters.
+
 ## Cover and editorial
 
 Both are pages of the issue (`kind` in the job: `cover` / `editorial`, from
@@ -299,10 +373,13 @@ its context) for anyone lettering by hand.
 | Script | Use |
 | --- | --- |
 | `new_project.py <name> [--title]` | start `~/Downloads/<name>/` from `_template/` |
-| `import_refs.py -p P <folder/images> [--style]` | import examples into `refs/`, list sheets missing from `charmap.json` |
+| `import_refs.py -p P <folder/images> [--style \| --scenario [--crop x,y,w,h]]` | import examples into `refs/` (scenarios: pages of the original manga), list sheets missing from `charmap.json` |
 | `split_scripts.py -p P [issues]` | issue scripts → `jobs/<issue>/page_NN.json` + `state.json` (keeps recorded states) |
 | `gen_page.py -p P <issue> <page> [...]` | ONE generation / edit / `--cost` / `--dry-run` |
 | `page_state.py -p P next\|show\|set\|approve ...` | what's next, notes, stage, approval |
+| `plan_panels.py -p P <issue> <page> [--force]` | panel mode: draft the page's panel plan (boxes, prompts with empty balloons, lines, scenarios) |
+| `gen_panel.py -p P <issue> <page> <panel> [...]` | panel mode: ONE panel generation — sheets + scenarios as images, source pages and earlier panels as describe-pages text |
+| `assemble_page.py -p P <issue> <page> [--preview-only]` | panel mode: compose the chosen panel tries into the page art (free) |
 | `make_layout.py -p P <issue> <page> [--force]` | detect the empty balloons (numbered overlay) and draft the layout JSON with the exact script lines |
 | `build_xcf.py <layout.json>` / `--list-fonts` | layout → `.xcf` with native GIMP text layers + preview JPG (every page) |
 | `status.py [-p P]` | approved / pending / awaiting_review per issue |
