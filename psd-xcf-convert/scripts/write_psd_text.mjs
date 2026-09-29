@@ -37,6 +37,11 @@ const rgb = (hex) => {
   const m = /^#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})/i.exec(hex || '');
   return m ? { r: parseInt(m[1], 16), g: parseInt(m[2], 16), b: parseInt(m[3], 16) } : { r: 0, g: 0, b: 0 };
 };
+// Photoshop's text language (Character panel; drives spell check and
+// hyphenation). Every Type layer this skill writes is Portuguese: Brazilian
+// (Adobe text engine code 11) - left unset, Photoshop
+// shows English: USA.
+const LANGUAGE_PT_BR = 11;
 const pxv = (value) => ({ value, units: 'Pixels' });
 const r2 = (v) => Math.round(v * 100) / 100;
 
@@ -53,7 +58,7 @@ function textRecord(t) {
     strikethrough: !!r.strike,
     tracking: Math.round(((r.letter_spacing || 0) / (r.size || 1)) * 1000),
     autoLeading: false,
-    ...(t.language != null ? { language: t.language } : {}),   // Adobe code, 11 = Portuguese: Brazilian
+    language: LANGUAGE_PT_BR,
     // GIMP: one line spacing per layer, a bigger run just makes its line taller
     leading: r2(t.leading * (r.size / (t.baseSize || r.size))),
   });

@@ -93,7 +93,6 @@ function textInfo(layer) {
   const info = {
     shape: t.shapeType === 'box' ? 'box' : 'point',
     angle: round(angle),
-    language: base.language ?? (t.styleRuns && t.styleRuns[0] && t.styleRuns[0].style && t.styleRuns[0].style.language) ?? null, // Adobe code, 11 = Portuguese: Brazilian
     hscale: round(hscale, 4),                           // 1 = none; box.w and bbox are AFTER the squeeze
     justification: (pstyle.justification || 'left'),
     autoLeading: pstyle.autoLeading ?? 1.2,

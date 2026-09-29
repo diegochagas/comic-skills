@@ -100,6 +100,7 @@ def add_text(image, item):
     layer.set_justification(JUSTIFY.get(item.get("align") or "center", Gimp.TextJustification.CENTER))
     layer.set_color(Gegl.Color.new(item.get("color") or "#000000"))
     layer.set_antialias(True)
+    layer.set_language("pt-br")                             # Photoshop: Portuguese: Brazilian
     if spacing:
         layer.set_line_spacing(spacing)
     if item.get("letter_spacing"):

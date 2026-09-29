@@ -139,6 +139,7 @@ def add_text_layer(image, original, i, box, text, style, font_name, placeholder)
     layer.set_justification(JUSTIFY.get(style.get("align") or "center", Gimp.TextJustification.CENTER))
     layer.set_color(hex_color(style["color"]) if style.get("color") else auto_color(image, original, x, y, w, h))
     layer.set_antialias(True)
+    layer.set_language("pt-br")                             # Photoshop: Portuguese: Brazilian
     # centre the unrotated bw x bh box on the block, then rotate about that centre
     ox, oy = x + (w - bw) / 2, y + (h - bh) / 2
     layer.set_offsets(int(round(ox)), int(round(oy)))

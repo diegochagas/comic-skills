@@ -124,18 +124,6 @@ def line_height(font, size):
     return h2 - h1, asc
 
 
-# Photoshop's text language (Adobe text engine code) <-> GIMP's text-layer language
-PS_LANGUAGE = {0: "en-us", 14: "en-gb", 10: "pt", 11: "pt-br", 12: "es", 2: "fr", 7: "it"}
-
-
-def ps_language(layer, ours):
-    if ours.get("language") is not None:
-        return ours["language"]                                  # what the PSD had
-    lang = (layer.get_language() or "").lower().replace("_", "-")
-    back = {v: k for k, v in PS_LANGUAGE.items()}
-    return back.get(lang, back.get(lang.split("-")[0]))          # None = leave Photoshop's default
-
-
 JUSTIFY = {"left": Gimp.TextJustification.LEFT, "right": Gimp.TextJustification.RIGHT,
            "center": Gimp.TextJustification.CENTER}
 JUSTIFY_BACK = {int(Gimp.TextJustification.LEFT): "left", int(Gimp.TextJustification.RIGHT): "right",
@@ -245,8 +233,7 @@ def make_text_layer(image, task, entry, raster, notes):
         layer.set_line_spacing(round(leading - natural, 2))
     if t.get("indent"):
         layer.set_indent(t["indent"])
-    if t.get("language") in PS_LANGUAGE:
-        layer.set_language(PS_LANGUAGE[t["language"]])
+    layer.set_language("pt-br")                                  # every text layer is Portuguese: Brazilian
 
     def style_key(r):
         return (r["font"], round(r["size"], 2), r["color"], r.get("bold"), r.get("italic"),
@@ -335,7 +322,7 @@ def make_text_layer(image, task, entry, raster, notes):
     layer.set_color_tag(raster.get_color_tag())
     if raster.get_mask() is not None:
         notes.add(f'"{entry["name"]}": the layer mask of this text layer was not carried over')
-    set_parasite_json(layer, {"angle": angle, "hscale": hscale, "shift": shift, "language": t.get("language"), "shape": t["shape"], "justification": just,
+    set_parasite_json(layer, {"angle": angle, "hscale": hscale, "shift": shift, "shape": t["shape"], "justification": just,
                               "fonts": {fonts[k]: k for k in fonts}})
     if task.get("keep_raster"):
         raster.set_visible(False)
@@ -599,7 +586,6 @@ def describe_text(image, layer, notes):
 
     info = {
         "hscale": hscale,
-        "language": ps_language(layer, ours),
         "shape": "box" if fixed else "point",
         "angle": angle,
         "box": {"w": bw, "h": bh, "cx": cx, "cy": cy},           # unrotated size + page centre, both shapes

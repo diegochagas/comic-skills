@@ -29,7 +29,7 @@ python3 <repo>/psd-xcf-convert/scripts/convert.py "<file or folder>" [flags]
 | Type layer, point text | text layer, dynamic | placed so the ink lands where Photoshop drew it |
 | font (PostScript name) | font (`Family Style`) | matched through fontconfig, see Fonts |
 | size × the layer's transform scale, colour, justification, tracking, leading, first-line indent | font size (px), colour, justify, letter spacing, line spacing, indent | |
-| text language (Character panel, e.g. Portuguese: Brazilian = Adobe code 11) | text layer language (`pt-br`) + the exact code in the parasite | comes back unchanged; a GIMP-made XCF maps its layer language (`pt-br` → 11, `pt` → 10, `en-us` → 0) |
+| text language (Character panel, e.g. Portuguese: Brazilian = Adobe code 11) | text layer language `pt-br` | both directions always write Portuguese: Brazilian, whatever the source said |
 | style runs (other font / size / colour, faux bold/italic, underline, strikethrough) | Pango markup on the text layer | bold/italic of a family with a real cut use that cut (`CCWildWords-BoldItalic`), faux otherwise |
 | All Caps / Small Caps | the text itself in capitals | GIMP has no caps attribute |
 | Type layer squeezed/stretched with Free Transform, or Character horizontal/vertical scale (SFX, tall titles) | text laid out at full height in a wider box, then the layer's width scaled to the same ratio | same line breaks and shape as Photoshop; like a rotation, editing the text in GIMP re-renders it unsqueezed (the `note:` gives the factor for the Scale tool) |
