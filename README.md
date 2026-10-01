@@ -5,7 +5,7 @@ comic studio (page scripts → AI-generated pages reviewed one by one, cover
 and editorial as editable GIMP `.xcf` → `.cbz`), manga scans →
 letter-ready or PT-BR-translated layered PSD/XCF files, a pattern-based
 page downloader, and small CLI skills for comic archives, PDF/PSD
-conversion, image batches and Japanese OCR, an AI text eraser
+conversion and image batches, an AI text eraser
 (textless copies of pages, nothing else changed), a PSD folder sync that
 only replaces pages whose art was not cropped, a PSD ⇄ XCF converter that
 keeps the lettering editable on both sides, and a local page index: a vision
@@ -24,15 +24,15 @@ Flat, one directory per skill:
 <skill>/SKILL.md      what the agent reads (workflow, how to pick flags from the request)
 <skill>/README.md     human overview, only where the skill is big enough to need one
 <skill>/scripts/      every script that skill runs (nothing lives outside its skill)
-<skill>/setup.sh      that skill's own setup (models, tessdata, node_modules, tool checks), if it needs any
-<skill>/examples/, _template/, sites/, models/, tessdata/   skill-owned assets (the last two are downloaded by setup.sh, not committed)
+<skill>/setup.sh      that skill's own setup (models, node_modules, tool checks), if it needs any
+<skill>/examples/, _template/, sites/, models/   skill-owned assets (the last one is downloaded by setup.sh, not committed)
 ```
 
 The only shared, machine-generated piece at the repo root is `venv/` (Python
 deps for every skill), created by **`./setup.sh`**, which then runs every
 `<skill>/setup.sh`. Everything else a skill needs lives inside it: `node_modules/` from its own
 `package.json` (`manga-translator-ptbr`, `comic-downloader`, `psd-xcf-convert`),
-`manga-translator-ptbr/models/`, `japanese-ocr-translate/tessdata/` (all
+`manga-translator-ptbr/models/` (all
 installed by `setup.sh`, all gitignored by the root `.gitignore`). The AI
 comic projects of `generate-comic-page` live outside the repo, in
 `~/Downloads/<project>/`. All commands in the skills are written relative to
@@ -54,7 +54,6 @@ the repo root.
 | [`describe-pages`](describe-pages/) | `describe_pages.py` | Describes every page image under a folder (recursive) with a local vision model in Ollama (Qwen3-VL 4B, `qwen3-vl:4b`, free, offline, ~5 s/page; see "Local models" below): page type, summary, the objects drawn, characters, setting, what the text is about. Saved as a named set in `~/Downloads/<name> descriptions/` (`pages.jsonl` + `index.json`), resumable, source never touched. |
 | [`find-pages`](find-pages/) | `find_pages.py` | Searches a describe-pages set for one or more terms ("computer", "boy with goggles"; AND, `--any`, `--type cover`, `--field objects`) and prints the paths of the original page images, ranked, with the matching text (`--show`); the agent verifies the top hits against the images before reporting. |
 | [`image-utils`](image-utils/) | `rotate_images.py`, `stretch_pngs.py` | Rotate every image in a folder in place by N degrees; stretch every PNG to exact W×H into `output/`. |
-| [`japanese-ocr-translate`](japanese-ocr-translate/) | `transcribe_japanese_images.py`, `translate_japanese_texts_ptbr.py`, `tessdata/` | Tesseract OCR of a folder of Japanese scans into one block-per-page TXT, then Google-translate it to PT-BR keeping the blocks — a rough reading pass, not lettering. |
 
 Each `SKILL.md` documents the scripts' flags and, for the CLI skills, a table
 of "what the user says → which flags to pass".
@@ -75,7 +74,7 @@ this repo. To use them from anywhere, symlink the skill folders into the
 global directories, the same way:
 
 ```sh
-for s in generate-comic-page manga-translator-ptbr clean-texts comic-downloader comic-archive pdf-psd-convert psd-sync psd-xcf-convert docx-odt-convert describe-pages find-pages image-utils japanese-ocr-translate; do
+for s in generate-comic-page manga-translator-ptbr clean-texts comic-downloader comic-archive pdf-psd-convert psd-sync psd-xcf-convert docx-odt-convert describe-pages find-pages image-utils; do
   for h in ~/.claude/skills ~/.agents/skills ~/.codex/skills; do
     mkdir -p "$h" && ln -sfn ~/Projects/comic-skills/$s "$h/$s"
   done
@@ -93,7 +92,6 @@ a newly added skill.
 | Higgsfield CLI | npm `@higgsfield/cli` | global npm | `npm i -g @higgsfield/cli`, then `higgsfield auth login` |
 | comic-text-detector model | [manga-image-translator release beta-0.3](https://github.com/zyddnys/manga-image-translator/releases/tag/beta-0.3) | `manga-translator-ptbr/models/comictextdetector.pt.onnx` | `manga-translator-ptbr/setup.sh` re-downloads if missing |
 | LaMa inpainting model | [Carve/LaMa-ONNX](https://huggingface.co/Carve/LaMa-ONNX) | `manga-translator-ptbr/models/lama_fp32.onnx` | `manga-translator-ptbr/setup.sh` |
-| Japanese Tesseract data | [tesseract-ocr/tessdata](https://github.com/tesseract-ocr/tessdata) | `japanese-ocr-translate/tessdata/` | `japanese-ocr-translate/setup.sh` |
 | ag-psd, canvas, pngjs | npm (`manga-translator-ptbr/package.json`) | `manga-translator-ptbr/node_modules/` | `<skill>/setup.sh` (npm install) |
 | ag-psd | npm (`psd-xcf-convert/package.json`) | `psd-xcf-convert/node_modules/` | `<skill>/setup.sh` (npm install) |
 | axios | npm (`comic-downloader/package.json`) | `comic-downloader/node_modules/` | `<skill>/setup.sh` (npm install) |
@@ -123,7 +121,7 @@ with `--force` to redo it. `index.json` records which model wrote each set.
 ```bash
 git clone <this repo> ~/Projects/comic-skills
 cd ~/Projects/comic-skills
-./setup.sh     # shared venv + python deps, then every <skill>/setup.sh (node_modules, ONNX models, tessdata, GIMP/tesseract checks)
+./setup.sh     # shared venv + python deps, then every <skill>/setup.sh (node_modules, ONNX models, GIMP checks)
 ```
 
 System requirements, by skill:
@@ -142,7 +140,6 @@ System requirements, by skill:
 - `generate-comic-page`: the Higgsfield CLI logged in to a Higgsfield account
   (Plus plan, 1000 credits/month); flatpak GIMP 3 and the `CCWildWords`
   font visible to it (every page is delivered as an `.xcf`).
-- `japanese-ocr-translate`: `tesseract` on `PATH` (`sudo apt install tesseract-ocr`).
 - `comic-archive`: `unrar` or `7z` only for RAR-based `.cbr` files.
 - `describe-pages`: [Ollama](https://ollama.com) running, with `qwen3-vl:4b`
   (any vision-capable model works via `--model`); a GPU with ~4 GB free
@@ -151,8 +148,7 @@ System requirements, by skill:
 ## Rules
 
 `.gitignore` blocks `venv/`, every `node_modules/` and `package-lock.json`,
-`manga-translator-ptbr/models/`, `japanese-ocr-translate/tessdata/`,
-`tmp_worklists/` and `__pycache__/`.
+`manga-translator-ptbr/models/`, `tmp_worklists/` and `__pycache__/`.
 
 **Every skill writes its results to `~/Downloads`**, never into the repo and
 never into the source folder it was pointed at (scans, archives and PSDs
@@ -176,7 +172,6 @@ place.
 | `describe-pages` | `~/Downloads/<name> descriptions/` (`pages.jsonl`, `index.json`; `<name>` = slug of the source's last two path parts) |
 | `find-pages` | nothing written; prints paths of the original images |
 | `image-utils` | `~/Downloads/<folder> rotated <deg>/`, `~/Downloads/<folder> <W>x<H>/` |
-| `japanese-ocr-translate` | `~/Downloads/<folder>/japanese_transcription.txt` (+ `_pt_br.txt`) |
 
 If you point an output at a syncing cloud drive (Nextcloud, Dropbox)
 instead, the sync client can race a fresh PSD write and revert it within

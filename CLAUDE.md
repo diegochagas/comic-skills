@@ -21,7 +21,7 @@ updated with page numbers; run with the system `python3`, which has `uno`),
 vision model in Ollama describes every page under a folder into a named set
 in `~/Downloads/<name> descriptions/`), `find-pages` (searches such a set and returns the
 paths of the pages that show something; the agent verifies the top hits by
-looking at them), `comic-archive`, `pdf-psd-convert`, `image-utils`, `japanese-ocr-translate`
+looking at them), `comic-archive`, `pdf-psd-convert`, `image-utils`
 (CLI wrappers that pick flags from the request). `.claude/skills/` and
 `.agents/skills/` contain symlinks to those folders; the `higgsfield-*`
 entries there are vendored third-party skills (`skills-lock.json`) — never
@@ -34,8 +34,8 @@ edit them.
   not committed inside the skills: `manga-translator-ptbr/node_modules/`
   (ag-psd, canvas, pngjs; its package.json is `"type": "module"`),
   `comic-downloader/node_modules/` (axios), `psd-xcf-convert/node_modules/`
-  (ag-psd only - no canvas), `manga-translator-ptbr/models/`
-  (comic-text-detector + LaMa ONNX) and `japanese-ocr-translate/tessdata/`.
+  (ag-psd only - no canvas) and `manga-translator-ptbr/models/`
+  (comic-text-detector + LaMa ONNX).
   A skill that needs npm packages gets its own `package.json`; the root
   `.gitignore` already ignores any `node_modules/` and `package-lock.json`.
 - All script paths in the skills are relative to the repo root; Python
