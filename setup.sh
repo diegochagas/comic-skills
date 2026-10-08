@@ -15,7 +15,9 @@ fi
 # manga-translator-ptbr: onnxruntime opencv numpy pillow | pdf-psd-convert: pymupdf psd-tools pillow
 # generate-comic-page, clean-texts: pillow opencv numpy | image-utils, comic-archive: pillow
 # describe-pages: pillow (the model comes from describe-pages/setup.sh via ollama) | find-pages: stdlib only
-venv/bin/pip install --quiet onnxruntime opencv-python-headless numpy \
+# restore-photos, modernize-photos: opencv numpy pillow (OpenCV 4: version 5 dropped the
+#   CascadeClassifier restore-photos' faces.py finds faces with)
+venv/bin/pip install --quiet onnxruntime "opencv-python-headless<5" numpy \
     pillow pymupdf "psd-tools[composite]"
 echo "venv ready: $(venv/bin/python -c 'import onnxruntime; print("onnxruntime", onnxruntime.__version__)')"
 

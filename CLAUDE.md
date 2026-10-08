@@ -17,6 +17,9 @@ editable: Type layers ⇄ GIMP text layers with the same fonts, Layer Style
 stroke/drop shadow ⇄ Filters > Text Styling), `docx-odt-convert` (Word
 .docx ⇄ LibreOffice .odt through a headless LibreOffice, table of contents
 updated with page numbers; run with the system `python3`, which has `uno`),
+`restore-photos` (scanned prints repaired by a local ComfyUI model, its
+pixels kept only inside the damage mask), `modernize-photos` (an old photo
+as if shot today on an iPhone: Higgsfield, else local ComfyUI),
 `describe-pages` (a local
 vision model in Ollama describes every page under a folder into a named set
 in `~/Downloads/<name> descriptions/`), `find-pages` (searches such a set and returns the
@@ -130,3 +133,15 @@ edit them.
   skill's `SKILL.md` and the README table.
 - Don't commit generated content (scans, PSDs, renders, worklists); the
   `.gitignore` already covers the usual folders.
+
+- `restore-photos` / `modernize-photos` (from the photo-restore repo):
+  `modernize-photos/scripts/modernize.py` imports from
+  `restore-photos/scripts/` (crop, Higgsfield helpers, ComfyUI client,
+  sheets), so the two folders stay side by side. Settings live in
+  `~/.config/photo-restore/` (kept under that name). In `restore-photos` the
+  model's pixels are used only inside the damage mask (`restore.py`
+  `diff_regions` → `composite`), colour-matched to the scan first; keep that
+  contract. Results go to `~/Downloads/photo-restore/<folder name>` and
+  `~/Downloads/photo-modernize/<folder name>`; no script writes next to its
+  input or into a photo library, and no personal path, host or library
+  location belongs in the repo.
