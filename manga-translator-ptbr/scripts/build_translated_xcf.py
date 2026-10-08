@@ -2,7 +2,7 @@
 """GIMP-format twin of build_translated_psd.mjs: builds an .xcf with layers
 "Original", "Copy" and one NATIVE GIMP text layer "Text N" per block (fixed
 paragraph box, font, size, colour, justification, rotation), by driving
-headless flatpak GIMP 3 with gimp_xcf_job.py. Same blocks JSON, same flags.
+headless GIMPhoto (flatpak GIMP 3) with gimp_xcf_job.py. Same blocks JSON, same flags.
 
 Usage (one page):
   python build_translated_xcf.py <source_image> <blocks.json> <out.xcf>
@@ -15,7 +15,7 @@ Usage (batch - GIMP takes ~15 s to start, so group pages when you can):
                 "with_copy": true, "placeholder": null, "font": ..., "preview": ...}, ...]
 
 Exit status 0 when every page logged OK; the per-page OK/FAIL lines are
-printed. GIMP command: flatpak org.gimp.GIMP by default; set GIMP_CMD to a
+printed. GIMP command: GIMPhoto (flatpak io.github.diegochagas.GIMPhoto) by default; set GIMP_CMD to a
 different launcher (e.g. GIMP_CMD="gimp-3.0" for a native install).
 No Python deps beyond the standard library.
 """
@@ -40,7 +40,7 @@ def run_gimp(pages: list[dict], timeout: int) -> tuple[list[str], bool]:
         json.dump({"pages": pages}, f)
         job_path = f.name
     log_path = job_path + ".log"
-    gimp_cmd = shlex.split(os.environ.get("GIMP_CMD", "flatpak run org.gimp.GIMP"))
+    gimp_cmd = shlex.split(os.environ.get("GIMP_CMD", "flatpak run io.github.diegochagas.GIMPhoto"))
     if gimp_cmd[0] == "flatpak":
         gimp_cmd = gimp_cmd[:2] + [f"--env=XCF_JOB={job_path}"] + gimp_cmd[2:]
         env = None
@@ -54,7 +54,7 @@ def run_gimp(pages: list[dict], timeout: int) -> tuple[list[str], bool]:
     except subprocess.TimeoutExpired:
         return [f"FAIL GIMP timed out after {timeout}s (job {job_path})"], False
     if not os.path.exists(log_path):
-        return [f"FAIL GIMP produced no log (job {job_path}); is flatpak org.gimp.GIMP installed?"], False
+        return [f"FAIL GIMP produced no log (job {job_path}); is GIMPhoto (io.github.diegochagas.GIMPhoto) installed?"], False
     lines = Path(log_path).read_text().splitlines()
     ok = "DONE" in lines and not any(l.startswith(("FAIL", "FATAL")) for l in lines)
     if ok:

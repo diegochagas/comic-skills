@@ -14,7 +14,7 @@ human overview. Everything runs from the repo root (`<repo>`), using the
 shared `venv/` and this skill's own `node_modules/` (ag-psd, canvas, pngjs)
 and `models/` (ONNX detector + LaMa); `<repo>/setup.sh` creates the venv and
 runs this skill's `setup.sh` for the rest. PSDs are written with [ag-psd](https://github.com/Agamnentzar/ag-psd);
-XCFs, with native GIMP text layers, by headless flatpak GIMP 3.
+XCFs, with native GIMP text layers, by headless GIMPhoto (flatpak GIMP 3).
 
 ## Output: what's in the PSD / XCF
 
@@ -139,8 +139,8 @@ pre-rendered) and has no effect on editing.
   venv; this folder's `setup.sh` runs `npm install` (`ag-psd`/`canvas`/`pngjs`)
   and downloads the two ONNX models (~100 MB detector + ~208 MB LaMa) into
   `models/`.
-- For XCF output only: [flatpak GIMP 3](https://flathub.org/apps/org.gimp.GIMP)
-  (`org.gimp.GIMP`), started without `-f` so fonts load. Fonts the flatpak
+- For XCF output only: [GIMPhoto](https://github.com/diegochagas/gimphoto) (GIMP 3)
+  (`io.github.diegochagas.GIMPhoto`), started without `-f` so fonts load. Fonts the flatpak
   can't see fall back to its context font.
 - 2 CPU cores are enough; a 7000×10000 page needs
   `node --max-old-space-size=4096` and produces 110–330 MB PSDs.

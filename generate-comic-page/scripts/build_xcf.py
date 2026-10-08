@@ -4,7 +4,7 @@ flat paper colour) at the bottom and every piece of text as a NATIVE GIMP
 text layer on top — Diego can retype, restyle and move each one in GIMP.
 Used for EVERY page: story pages (one CCWildWords text box per empty balloon,
 layout drafted by make_layout.py), covers and editorials.
-Drives headless flatpak GIMP 3 with gimp_layout_job.py.
+Drives headless GIMPhoto (flatpak GIMP 3) with gimp_layout_job.py.
 
 Usage:
   build_xcf.py <layout.json>              build the XCF (+ preview JPG)
@@ -37,7 +37,7 @@ layout.json (paths relative to the layout file; see SKILL.md for the workflow):
 Exit status 0 when GIMP reloaded the saved XCF and found every layer, with
 every text layer still editable and holding the exact text. The log lines
 (chosen font sizes, missing fonts, possible overflow) are printed.
-GIMP command: flatpak org.gimp.GIMP by default; GIMP_CMD overrides it (e.g.
+GIMP command: GIMPhoto (flatpak io.github.diegochagas.GIMPhoto) by default; GIMP_CMD overrides it (e.g.
 GIMP_CMD="gimp-3.0"). No Python deps beyond the standard library + Pillow.
 """
 from __future__ import annotations
@@ -59,7 +59,7 @@ def run_gimp(job: dict, timeout: int) -> tuple[list[str], bool]:
         json.dump(job, f)
         job_path = f.name
     log_path = job_path + ".log"
-    gimp_cmd = shlex.split(os.environ.get("GIMP_CMD", "flatpak run org.gimp.GIMP"))
+    gimp_cmd = shlex.split(os.environ.get("GIMP_CMD", "flatpak run io.github.diegochagas.GIMPhoto"))
     if gimp_cmd[0] == "flatpak":
         gimp_cmd = gimp_cmd[:2] + [f"--env=LAYOUT_JOB={job_path}"] + gimp_cmd[2:]
         env = None
@@ -73,7 +73,7 @@ def run_gimp(job: dict, timeout: int) -> tuple[list[str], bool]:
     except subprocess.TimeoutExpired:
         return [f"FAIL GIMP timed out after {timeout}s (job {job_path})"], False
     if not os.path.exists(log_path):
-        return [f"FAIL GIMP produced no log (job {job_path}); is flatpak org.gimp.GIMP installed?"], False
+        return [f"FAIL GIMP produced no log (job {job_path}); is GIMPhoto (io.github.diegochagas.GIMPhoto) installed?"], False
     lines = Path(log_path).read_text().splitlines()
     ok = "DONE" in lines and not any(l.startswith(("FAIL", "FATAL")) for l in lines)
     if ok:

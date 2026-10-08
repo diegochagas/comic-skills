@@ -2,7 +2,7 @@
 # Runs INSIDE GIMP's python-fu-eval interpreter; launched by convert.py, which
 # writes the job JSON and reads the log:
 #
-#   flatpak run --env=CONVERT_JOB=/abs/job.json org.gimp.GIMP -id \
+#   flatpak run --env=CONVERT_JOB=/abs/job.json io.github.diegochagas.GIMPhoto -id \
 #     --batch-interpreter=python-fu-eval \
 #     -b "exec(open('/abs/gimp_convert_job.py').read())" --quit
 #

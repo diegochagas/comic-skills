@@ -4,7 +4,7 @@
 # Runs INSIDE GIMP's python-fu-eval interpreter; launched by build_xcf.py,
 # which resolves every path/box to absolute pixels and reads the log:
 #
-#   flatpak run --env=LAYOUT_JOB=/abs/job.json org.gimp.GIMP -id \
+#   flatpak run --env=LAYOUT_JOB=/abs/job.json io.github.diegochagas.GIMPhoto -id \
 #     --batch-interpreter=python-fu-eval \
 #     -b "exec(open('/abs/gimp_layout_job.py').read())" --quit
 #

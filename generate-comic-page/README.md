@@ -60,7 +60,7 @@ gerado sem você ter visto a página anterior.
 npm i -g @higgsfield/cli
 higgsfield auth login                 # login na conta Higgsfield (navegador)
 npx skills add higgsfield-ai/skills   # skills higgsfield-* em .agents/skills/
-flatpak install flathub org.gimp.GIMP # gera os .xcf (obrigatório)
+curl -fLO https://github.com/diegochagas/gimphoto/releases/latest/download/GIMPhoto.flatpak && flatpak install --user GIMPhoto.flatpak # gera os .xcf (obrigatório)
 # fonte CCWildWords instalada no sistema (o GIMP precisa enxergar: build_xcf.py --list-fonts wild)
 ```
 
