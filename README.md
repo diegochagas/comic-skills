@@ -12,7 +12,7 @@ keeps the lettering editable on both sides, and a local page index: a vision
 model describes every page of a folder so that pages can be searched by what
 is drawn on them.
 
-> These skills are tailored to this machine (flatpak GIMP 3, a Higgsfield
+> These skills are tailored to this machine (GIMPhoto, a flatpak GIMP 3; a Higgsfield
 > Plus subscription, Brazilian Portuguese as the target language). Treat them
 > as examples and adapt rather than reuse verbatim.
 
@@ -127,10 +127,10 @@ cd ~/Projects/comic-skills
 System requirements, by skill:
 
 - `manga-translator-ptbr`: Python 3.10+, Node.js + npm, ~300 MB for the
-  two models (in the skill's `models/`). [flatpak GIMP 3](https://flathub.org/apps/org.gimp.GIMP) only
+  two models (in the skill's `models/`). [GIMPhoto](https://github.com/diegochagas/gimphoto) (GIMP 3) only
   for XCF output. The `CCWildWords-Regular` font on the machine that opens
   the files in Photoshop/GIMP.
-- `psd-xcf-convert`: Node.js + npm, flatpak GIMP 3, fontconfig (`fc-list`);
+- `psd-xcf-convert`: Node.js + npm, GIMPhoto (flatpak GIMP 3), fontconfig (`fc-list`);
   the fonts of the files installed where they are opened (missing ones are
   substituted and reported).
 - `docx-odt-convert`: LibreOffice (`soffice`) and `python3-uno` (the system
@@ -138,7 +138,7 @@ System requirements, by skill:
 - `comic-downloader`: Node.js only.
 - `clean-texts`: the Higgsfield CLI logged in (same account as below).
 - `generate-comic-page`: the Higgsfield CLI logged in to a Higgsfield account
-  (Plus plan, 1000 credits/month); flatpak GIMP 3 and the `CCWildWords`
+  (Plus plan, 1000 credits/month); GIMPhoto (flatpak GIMP 3) and the `CCWildWords`
   font visible to it (every page is delivered as an `.xcf`).
 - `comic-archive`: `unrar` or `7z` only for RAR-based `.cbr` files.
 - `describe-pages`: [Ollama](https://ollama.com) running, with `qwen3-vl:4b`

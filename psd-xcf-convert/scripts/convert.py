@@ -28,7 +28,7 @@ Pipeline (one headless GIMP start per batch of files, ~15 s each start):
 Fonts are matched through fontconfig (PostScript name <-> family + style).
 A font that is not installed is replaced by fontconfig's closest match and
 reported; the original name is kept inside the XCF so the way back restores
-it. GIMP command: flatpak org.gimp.GIMP; GIMP_CMD overrides (GIMP 3 only).
+it. GIMP command: GIMPhoto (flatpak io.github.diegochagas.GIMPhoto); GIMP_CMD overrides (GIMP 3 only).
 Exit status 0 when every file converted, 2 otherwise. Standard library only.
 """
 from __future__ import annotations
@@ -178,7 +178,7 @@ def run_gimp(tasks: list[dict], work: Path, timeout: int) -> list[str]:
     log_path = Path(str(job_path) + ".log")
     log_path.unlink(missing_ok=True)
     job_path.write_text(json.dumps({"tasks": tasks}))
-    gimp_cmd = shlex.split(os.environ.get("GIMP_CMD", "flatpak run org.gimp.GIMP"))
+    gimp_cmd = shlex.split(os.environ.get("GIMP_CMD", "flatpak run io.github.diegochagas.GIMPhoto"))
     env = None
     if gimp_cmd[0] == "flatpak":
         gimp_cmd = gimp_cmd[:2] + [f"--env=CONVERT_JOB={job_path}"] + gimp_cmd[2:]
@@ -193,9 +193,9 @@ def run_gimp(tasks: list[dict], work: Path, timeout: int) -> list[str]:
         lines = log_path.read_text().splitlines() if log_path.exists() else []
         return lines + [f"FATAL GIMP timed out after {timeout}s"]
     except OSError as e:
-        return [f"FATAL could not start GIMP ({e}); set GIMP_CMD or install flatpak org.gimp.GIMP"]
+        return [f"FATAL could not start GIMP ({e}); set GIMP_CMD or install GIMPhoto (io.github.diegochagas.GIMPhoto)"]
     if not log_path.exists():
-        return ["FATAL GIMP produced no log; is flatpak org.gimp.GIMP (GIMP 3) installed?"]
+        return ["FATAL GIMP produced no log; is GIMPhoto (io.github.diegochagas.GIMPhoto) installed?"]
     return log_path.read_text().splitlines()
 
 

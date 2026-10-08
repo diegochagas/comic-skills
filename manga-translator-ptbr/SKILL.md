@@ -53,8 +53,8 @@ need `<skill>/node_modules` (ag-psd, canvas, pngjs - `npm install` in
 busy-background erases fall back to OpenCV Telea; `INPAINT=qwen` sends those
 regions to a local Qwen-Image-Edit instead, see "Local AI inpainting"). The venv comes from
 `<repo>/setup.sh`, the rest from `<skill>/setup.sh` (which the root one runs).
-PSDs are written by ag-psd (no GIMP). XCF output needs flatpak GIMP 3
-(`org.gimp.GIMP`; `GIMP_CMD` env for another launcher).
+PSDs are written by ag-psd (no GIMP). XCF output needs GIMPhoto (flatpak GIMP 3)
+(`io.github.diegochagas.GIMPhoto`; `GIMP_CMD` env for another launcher).
 
 **Where results go: `~/Downloads/<source folder name>/`** - the `<out_dir>`
 / `OUT` / `OUT_DIR` of every command below (`COMIC_OUTPUT_DIR` replaces

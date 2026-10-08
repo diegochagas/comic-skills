@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # manga-translator-ptbr setup (also run by <repo>/setup.sh): downloads the two
 # ONNX models into ./models, installs ./node_modules (ag-psd, canvas, pngjs)
-# and checks for flatpak GIMP 3, needed only for XCF output. Python deps come
+# and checks for GIMPhoto (flatpak GIMP 3), needed only for XCF output. Python deps come
 # from the shared <repo>/venv (created by <repo>/setup.sh). Safe to re-run.
 set -euo pipefail
 cd "$(dirname "$0")"
@@ -36,7 +36,7 @@ else
     echo "WARNING: npm not found - install Node.js; every PSD is written by the .mjs scripts (ag-psd)."
 fi
 
-if ! flatpak info org.gimp.GIMP >/dev/null 2>&1; then
-    echo "WARNING: flatpak GIMP 3 (org.gimp.GIMP) not found - only needed for XCF output (build_translated_xcf.py); PSDs work without it."
-    echo "  flatpak install flathub org.gimp.GIMP"
+if ! flatpak info io.github.diegochagas.GIMPhoto >/dev/null 2>&1; then
+    echo "WARNING: GIMPhoto (io.github.diegochagas.GIMPhoto, GIMP 3) not found - only needed for XCF output (build_translated_xcf.py); PSDs work without it."
+    echo "  curl -fLO https://github.com/diegochagas/gimphoto/releases/latest/download/GIMPhoto.flatpak && flatpak install --user GIMPhoto.flatpak"
 fi

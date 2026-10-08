@@ -3,7 +3,7 @@
 # Runs INSIDE GIMP's python-fu-eval interpreter; normally launched by
 # build_translated_xcf.py (which writes the job JSON and reads the log):
 #
-#   flatpak run --env=XCF_JOB=/abs/job.json org.gimp.GIMP -id \
+#   flatpak run --env=XCF_JOB=/abs/job.json io.github.diegochagas.GIMPhoto -id \
 #     --batch-interpreter=python-fu-eval \
 #     -b "exec(open('/abs/gimp_xcf_job.py').read())" --quit
 #

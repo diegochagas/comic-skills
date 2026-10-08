@@ -7,7 +7,7 @@ description: Convert Photoshop PSD files to GIMP XCF and GIMP XCF files to Photo
 
 One command, `psd-xcf-convert/scripts/convert.py` (standard-library Python,
 any `python3`). It needs Node + this skill's `node_modules/` (ag-psd, from
-`psd-xcf-convert/setup.sh`), flatpak GIMP 3 (`GIMP_CMD` overrides the launcher)
+`psd-xcf-convert/setup.sh`), GIMPhoto, a flatpak GIMP 3 (`GIMP_CMD` overrides the launcher)
 and `fc-list`/`fc-match`. `<repo>` is the comic-skills checkout.
 
 ```bash
