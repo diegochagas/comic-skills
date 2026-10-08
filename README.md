@@ -54,9 +54,47 @@ the repo root.
 | [`describe-pages`](describe-pages/) | `describe_pages.py` | Describes every page image under a folder (recursive) with a local vision model in Ollama (Qwen3-VL 4B, `qwen3-vl:4b`, free, offline, ~5 s/page; see "Local models" below): page type, summary, the objects drawn, characters, setting, what the text is about. Saved as a named set in `~/Downloads/<name> descriptions/` (`pages.jsonl` + `index.json`), resumable, source never touched. |
 | [`find-pages`](find-pages/) | `find_pages.py` | Searches a describe-pages set for one or more terms ("computer", "boy with goggles"; AND, `--any`, `--type cover`, `--field objects`) and prints the paths of the original page images, ranked, with the matching text (`--show`); the agent verifies the top hits against the images before reporting. |
 | [`image-utils`](image-utils/) | `rotate_images.py`, `stretch_pngs.py` | Rotate every image in a folder in place by N degrees; stretch every PNG to exact W×H into `output/`. |
+| [`restore-photos`](restore-photos/) | `restore.py`, `crop.py`, `faces.py`, `compare_server.py`, `inpaint.py`, `fix_color.py`, `fix_broken.py`, `contact_sheet.py`, `comfy_client.py`, `higgsfield_restore.py`, `finalize.py`, `immich_replace.py`, `examples/` | `/restore-photos <image-or-folder>`: repairs scanned prints — water and emulsion damage, stains, scratches, creases, cut corners — with a local image-edit model (FLUX.2 klein by default, Qwen-Image-Edit with `--backend qwen`, both in ComfyUI, free, offline) and takes the model's pixels **only inside the damage mask**: the output is aligned and colour-matched to the scan, the areas where it still differs are the damage it repaired, and every other pixel, every face, stays the scan's own, in the scan's own colours. `--fix-color` adds an automatic colour fix after the repair; `--mode color` runs that fix alone on faded or colour-cast prints (no model, ~1 s/photo). A folder (`--recursive` for sub-folders) ends with QC contact sheets; the agent reviews every one and fixes a mask for free with `--reuse-raw` plus `--drop N` / `--include N` / `--add x,y,w,h` / `--protect x,y,w,h`, or rerolls with `--seed`. Scans are straightened and their white borders cut first (`--cut` for destroyed edges, `--no-crop` to keep them), faces keep the scan's features (`--ref` gives the model a clean photo of the same people instead, `--whole` takes its picture as the result). `fix_broken.py` re-saves JPEGs with a data-stream error or a truncated tail (`--crop-strip` removes the grey strip), EXIF kept. `compare_server.py` is the review page: original and result side by side, a pick and a note per photo, saved next to the results. Results in `~/Downloads/photo-restore/<folder name>/`, sources never touched. |
+| [`modernize-photos`](modernize-photos/) | `modernize.py` (reuses `restore-photos/scripts/`) | `/modernize-photos <image-or-folder>`: makes an old photo look as if it had been taken today with a modern iPhone — sharp, clean, HDR, true-to-life colours, no grain, fading or damage; black-and-white comes back in colour (`--keep-bw` keeps it). Same people, moment and framing, but the whole picture is the model's, so every result is reviewed. Uses Higgsfield (Nano Banana Pro, paid, 2 credits/photo) when its CLI is logged in and has credits, else a local ComfyUI model (FLUX.2 klein / Qwen-Image-Edit, free); photos Higgsfield refuses are done locally. `--cost` estimates first. Results in `~/Downloads/photo-modernize/<folder name>/`. |
 
 Each `SKILL.md` documents the scripts' flags and, for the CLI skills, a table
 of "what the user says → which flags to pass".
+
+## Photo restoration
+
+`restore-photos` and `modernize-photos` came from the photo-restore repository
+(2026-10-08). They run on the local ComfyUI (FLUX.2 klein / Qwen-Image-Edit)
+installed by [local-ai-setup](https://github.com/diegochagas/local-ai-setup),
+and `modernize-photos` on Higgsfield first. Their settings stay in
+`~/.config/photo-restore/` (`comfyui.env`, `compare.env`, `names.json`,
+`immich.env`), written empty by `restore-photos/setup.sh`.
+
+For one photo inside an image editor,
+[GIMPhoto](https://github.com/diegochagas/gimphoto)'s *Filters › Neural
+Filters* has the same two tools on the same local models: *Photo
+Restoration* (the same damage-mask method) and *Modern Photo* (the same
+prompt as `modernize-photos`), each as a new layer with a mask.
+
+### How a print is restored (restore-photos)
+
+1. The whole scan goes to the model with a "repair this damaged print"
+   instruction (FLUX.2 klein, ~30 s at 1 MP; Qwen-Image-Edit as the
+   alternative, ~100 s).
+2. The output is aligned to the original (ECC affine) and its colours
+   matched to the original (per-channel linear fit on the pixels the model
+   left alone).
+3. Where the two still differ strongly, the model repaired something: that
+   is the damage mask. Regions are numbered on `work/<name>.regions.jpg` so
+   the agent (and you) can see exactly what will change, and drop, include
+   or add regions and re-run without a new model call.
+4. The model's pixels replace the original only inside the mask, feathered.
+   The photo keeps its original colours (the pasted pixels were matched to
+   them). `--fix-color`, or `--mode color` for faded prints, adds
+   auto-levels + a half grey-world balance + light CLAHE (no AI). Results
+   are JPEG q95 with the original's EXIF.
+
+The agent looks at every `work/<name>.compare.jpg` (original | result)
+before a photo counts as done.
 
 ## Consumers
 
@@ -172,6 +210,8 @@ place.
 | `describe-pages` | `~/Downloads/<name> descriptions/` (`pages.jsonl`, `index.json`; `<name>` = slug of the source's last two path parts) |
 | `find-pages` | nothing written; prints paths of the original images |
 | `image-utils` | `~/Downloads/<folder> rotated <deg>/`, `~/Downloads/<folder> <W>x<H>/` |
+| `restore-photos` | `~/Downloads/photo-restore/<folder name>/` (`restored/`, `work/`, `sheets/`; `$PHOTO_RESTORE_OUT`) |
+| `modernize-photos` | `~/Downloads/photo-modernize/<folder name>/` (`modernized/`, `work/`, `sheets/`; `$PHOTO_MODERNIZE_OUT`) |
 
 If you point an output at a syncing cloud drive (Nextcloud, Dropbox)
 instead, the sync client can race a fresh PSD write and revert it within
