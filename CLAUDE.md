@@ -6,7 +6,11 @@ a symlink, as `AGENTS.md` (Codex). The README's table lists every skill and
 its scripts; read a skill's `SKILL.md` before running any of its scripts.
 
 Skills: `generate-comic-page` (AI comic studio, one reviewed page at a time), `manga-translator-ptbr` (scans →
-letter-ready or PT-BR translated PSD/XCF files), `clean-texts` (Higgsfield
+letter-ready or PT-BR translated PSD/XCF files; every text box it writes is
+sized to show its whole text and boxes that cover each other are moved
+apart), `split-scans` (double-page scans → one flattened PSD per page,
+scanner border cut, spine shadow turned back into paper; runs first inside
+manga-translator-ptbr for `NNN-MMM` scans), `clean-texts` (Higgsfield
 text eraser: textless PNG copies, every pixel outside the erased text restored
 from the original; the agent QCs each result), `comic-downloader`
 (pattern-based page downloads from JSON site profiles), `psd-sync` (two folders of
@@ -61,6 +65,25 @@ edit them.
   `qwen` is really a hybrid: flat-screentone regions still go to LaMa
   (`INPAINT_ROUTE=qwen` forces the model everywhere), and anything the model
   misses or fails on falls back to LaMa on its own.
+
+- `split-scans` is pure OpenCV geometry (`page_geometry.py`: paper mask from
+  the scanner background colour, gutter valley per row band, envelope line
+  fits of the paper edges, homography per page, illumination map of the
+  shadow band) plus `psd_io.mjs` (ag-psd dump/build so every raster layer is
+  warped the same way and text layers travel with their page). The gutter
+  core reuses manga-translator-ptbr's `inpaint_lama.py`. Automatic spread
+  detection is deliberately conservative: a picture that spans two pages but
+  keeps its inner margins is the agent's call (`--spread yes --only STEM`).
+  Reading order is a flag (`--rtl` = first number on the right page), never
+  guessed from file names. Output is always a PSD with the page as scanned
+  under the fixed page.
+- `manga-translator-ptbr` text boxes: `fit_boxes.mjs` + `text_metrics.mjs`
+  (node-canvas with the real font found through `fc-match`) grow every box
+  it writes until its text fits - height rule calibrated on boxes Diego
+  sized by hand in Photoshop: ascent + (lines-1) * 1.2 em + 1 px - and move
+  boxes whose written text would collide; `build_translated_psd.mjs`,
+  `set_text_layers.mjs` and `add_and_fill_text_layers.mjs` call it
+  (`--no-fit` skips it), `fit_text_boxes.mjs` applies it to finished PSDs.
 
 - `psd-xcf-convert` splits the work by who can do it: GIMP's own PSD
   loader/exporter carries pixels, groups, masks and modes; ag-psd

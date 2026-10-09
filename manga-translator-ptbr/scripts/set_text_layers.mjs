@@ -5,14 +5,18 @@
 // paragraph style are untouched -- only the string itself changes, and the
 // layer's text language is set to Portuguese: Brazilian.
 //
-// Usage: node set_text_layers.mjs <psd> <edits.json> [--output <path>]
+// Usage: node set_text_layers.mjs <psd> <edits.json> [--output <path>] [--no-fit]
 // edits.json: { "<layer index>": "new text", ... }  (index from
 // list_text_layers.mjs) -- or use the layer name instead of the index.
 // --output defaults to overwriting <psd> in place.
+// After the edit every text box is grown to show its whole text at the box's
+// font size and boxes whose text would collide are moved apart
+// (fit_boxes.mjs); --no-fit leaves the boxes exactly as they were.
 
 import * as fs from 'fs';
 import * as path from 'path';
 import { readPsd, writePsdBuffer } from 'ag-psd';
+import { fitTextLayers, describeChanges } from './fit_boxes.mjs';
 
 const [psdPath, editsPath] = process.argv.slice(2);
 const outIdx = process.argv.indexOf('--output');
@@ -48,6 +52,10 @@ for (const [key, newText] of Object.entries(edits)) {
   applied++;
 }
 
+if (!process.argv.includes('--no-fit')) {
+  const fit = fitTextLayers(psd.children, psd.width, psd.height);
+  if (fit.changes.length) console.log(`text boxes fitted (${fit.changes.length}):\n` + describeChanges(fit));
+}
 fs.mkdirSync(path.dirname(outPath), { recursive: true });
 fs.writeFileSync(outPath, writePsdBuffer(psd, { generateThumbnail: false }));
 console.log(`${path.basename(outPath)}: applied ${applied}/${Object.keys(edits).length} edit(s)`);

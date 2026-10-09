@@ -16,6 +16,26 @@ from PIL import Image, ImageDraw, ImageFont
 Image.MAX_IMAGE_PIXELS = None
 HERE = os.path.dirname(os.path.abspath(__file__))
 FONT = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
+_font_files = {}
+
+
+def font_file(ps_name):
+    """The installed file for a Photoshop font name (fontconfig), else DejaVu."""
+    if ps_name not in _font_files:
+        path = FONT
+        family = (ps_name or "").split("-")[0]
+        for pattern, want in ((f":postscriptname={ps_name}", lambda g, f: g.lower() == (ps_name or "").lower()),
+                              (f":family={family}:style=Regular", lambda g, f: f.replace(" ", "").lower() == family.lower())):
+            try:
+                out = subprocess.check_output(["fc-match", "-f", "%{file}|%{postscriptname}|%{family}", pattern], text=True).strip()
+                file, got, fam = (out.split("|") + ["", ""])[:3]
+                if want(got, fam):
+                    path = file
+                    break
+            except Exception:
+                pass
+        _font_files[ps_name] = path
+    return _font_files[ps_name]
 
 
 def wrap(draw, text, font, width):
@@ -52,7 +72,7 @@ def main():
         rot = L.get("rotate") or 0
         bw, bh = (h, w) if abs(rot) == 90 else (w, h)
         size = max(6, int((L.get("fontSize") or 12) * s))
-        font = ImageFont.truetype(FONT, size)
+        font = ImageFont.truetype(font_file(L.get("font")), size)
         c = L.get("color") or {"r": 0, "g": 0, "b": 0}
         col = (int(c["r"]), int(c["g"]), int(c["b"]), 255)
         lines = wrap(draw, L["text"], font, bw)
@@ -65,7 +85,7 @@ def main():
             al = L.get("align") or "center"
             tx = 0 if al == "left" else (bw - tw if al == "right" else (bw - tw) / 2)
             d2.text((tx, ty), ln, font=font, fill=col)
-            ty += size * 1.15
+            ty += size * 1.2      # Photoshop auto leading
         if rot == 90:
             layer = layer.rotate(-90, expand=True)
         elif rot == -90:

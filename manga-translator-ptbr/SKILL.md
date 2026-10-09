@@ -32,6 +32,59 @@ raster layer with the cleaned/lettered art, and native Photoshop paragraph
 text layers positioned over each speech balloon, each pre-filled with
 placeholder Latin text.
 
+## Step 0 - double-page scans are split first
+
+When the source files are flatbed scans of an open book - two consecutive
+page numbers in one name (`082-083.jpg`, `030-31.psd`) or one wide image
+showing two facing pages - run the **split-scans** skill before anything
+else (read `split-scans/SKILL.md`): it cuts each scan into one flattened,
+gutter-fixed PSD per page (`082.psd` + `083.psd`; a real spread stays one
+file), always with the page as scanned in `Original` under the fixed page.
+The first number is the left page (how Diego names his scans); `--rtl` only
+for scans numbered in reading order.
+
+- Raw scans (modes B and C): the round scripts do it on their own when
+  `SRC` holds `NNN-MMM` files (`SPLIT=auto`, the default; `SPLIT=0`
+  disables, `SPLIT_ARGS="--spread no"` passes flags): they write
+  `<OUT>/split/` with `--also-images`, detect on `split/images/<page>.png`
+  (the fixed page) and build each PSD with `--original
+  split/originals/<page>.png`, so the translated file has the page as
+  scanned under the cleaned, gutter-fixed Copy. Review `split/review/`
+  before translating.
+- PSDs that are already translated or lettered (`NNN-MMM.psd`): split them
+  directly; their text boxes move with the page they sit on. Then run
+  `fit_text_boxes.mjs` (below) on the results.
+
+## Text boxes always show their whole text
+
+Every text box this skill writes or fills is sized for its text: after
+`build_translated_psd.mjs`, `set_text_layers.mjs` and
+`add_and_fill_text_layers.mjs` put a translation in a box, the box keeps
+its centre and grows - wider when a word is wider than it, taller when the
+wrapped lines need more height, measured with the real font through
+node-canvas (`text_metrics.mjs`; the PostScript name is resolved with
+`fc-match`, DejaVu stands in with a wider margin when the font is not
+installed) and Photoshop's rules (auto leading 120 %, a line shows once its
+baseline is inside the box - calibrated on boxes Diego sized by hand).
+Boxes whose written text would cover another box's text are moved apart
+along the axis of least overlap, both by half, and the written text is kept
+on the canvas (`fit_boxes.mjs`). The log lists every change
+(`Text 2: 91x228 -> 220x348 (9 lines at 32px); moved 0,13`) and any pair
+that still overlaps. `--no-fit` keeps the exact rectangles.
+
+For finished PSDs (boxes filled by hand, older runs, split pages):
+
+```bash
+node manga-translator-ptbr/scripts/fit_text_boxes.mjs <psd | folder> [--from 150] [--only STEM ...] [--output DIR | --in-place] [--dry-run]
+```
+
+`--from 150` takes the stems that sort at or after `150`; the default
+output is `~/Downloads/<folder name> textfit/`, `--in-place` rewrites the
+inputs (back them up first - copy the files to a `_backup_...` folder next
+to them, as Diego does). Dry-run first and read the list; rasters stay
+byte-exact, only the changed text layers' geometry is rewritten (their
+cached render is dropped, Photoshop re-renders on open).
+
 ## Division of labor
 
 The scripts below do all the mechanical PSD I/O byte-exactly (no
@@ -80,7 +133,8 @@ Only then build XCFs *instead of* PSDs (not both) with the same inputs:
 
 `build_translated_psd.mjs` and `build_translated_xcf.py` take the SAME
 positional arguments and flags (`<source> <blocks.json> <out>` +
-`--copy-image`, `--no-copy`, `--placeholder [text]`, `--font`), so any
+`--copy-image`, `--no-copy`, `--placeholder [text]`, `--font`; the PSD
+builder also takes `--original <png>` for the Original layer and `--no-fit`), so any
 command below that builds a PSD builds an XCF by swapping the script and the
 extension. The round scripts take `FORMAT=xcf` (default `psd`).
 
@@ -134,6 +188,9 @@ context font (the log line says so; the letterer changes the font in GIMP).
 - `annotate_text_boxes.py <image> <layers.json> <out.png>` — draws numbered
   boxes from a `list_layers.mjs` dump over the page, 2x, to match layer
   indices to balloons by eye.
+- `fit_text_boxes.mjs <psd|folder> [--from STEM] [--only ...] [--output DIR | --in-place] [--dry-run]`
+  — grows every text box to show its whole text and moves boxes whose text
+  covers another apart (see "Text boxes always show their whole text").
 - `run_apply_round.sh` — `IMG_DIR=<images> [OUT_DIR=~/Downloads/<images dir name>]`; applies
   `<OUT_DIR>/translations/<stem>.json` to `<OUT_DIR>/<stem>.psd` for every
   page not yet marked `.applied`, resumable.
@@ -243,8 +300,12 @@ optional page subset.
 ### C1. Whole folder, resumable (the normal way)
 
 ```bash
-SRC=<images dir> [OUT=~/Downloads/<images dir name>] [FORMAT=psd|xcf] [BUDGET=500] [PAGES="010 011"] manga-translator-ptbr/scripts/run_letter_round.sh
+SRC=<images dir> [OUT=~/Downloads/<images dir name>] [FORMAT=psd|xcf] [BUDGET=500] [PAGES="010 011"] [SPLIT=auto|0] [SPLIT_ARGS="--spread no"] manga-translator-ptbr/scripts/run_letter_round.sh
 ```
+
+With `NNN-MMM` scans in `SRC` the first call splits them into
+`<OUT>/split/` (split-scans, see Step 0) and every page is then processed
+from `split/images/`, its PSD built with the page as scanned as Original.
 
 Call it repeatedly until it prints `ALL DONE` (it stops starting new pages
 after `BUDGET` seconds so a shell call never hits the tool timeout; pages

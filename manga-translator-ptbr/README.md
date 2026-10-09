@@ -30,7 +30,9 @@ XCFs, with native GIMP text layers, by headless GIMPhoto (flatpak GIMP 3).
   style) when the text sits over artwork. Inpainted areas are imperfect by
   nature — restoration of anything worth keeping is manual, by copying from
   the Original layer.
-- **One native text layer per text block** (top) — in a PSD a real, editable
+- **One native text layer per text block** (top), always big enough to show
+  its whole text (a box grows, keeping its centre, until the lines fit at
+  its font size; boxes whose text would cover each other are moved apart) — in a PSD a real, editable
   Photoshop **paragraph text box** (the Paragraph Type tool: a fixed
   word-wrap box, not the auto-sizing Point Type); in an XCF a GIMP text
   layer in fixed-box mode. Positioned and sized to match that block. Set in **CCWildWords-Regular** (a manga/comic lettering
@@ -62,6 +64,10 @@ here as the "no translation" path of the same toolchain.
 
 ### How the pipeline works
 
+0. **Split double-page scans** — `NNN-MMM` scans go through the
+   [split-scans](../split-scans/) skill first (one flattened, gutter-fixed
+   PSD per page; the round scripts do it with `SPLIT=auto`), and the
+   translated PSD is built with the page as scanned as its Original.
 1. **Detect** — [comic-text-detector](https://github.com/dmMaze/comic-text-detector)
    (ONNX, local, no network) finds text strokes and text regions. Mode C
    runs it at page scale (`detect_text.py`, erasing everything the gate
@@ -109,7 +115,9 @@ here as the "no translation" path of the same toolchain.
 | `scripts/preview_psd_text.py` | approximate JPG preview of a PSD's text boxes |
 | `scripts/list_layers.mjs`, `scripts/list_text_layers.mjs` | dump a PSD's layers (all / text only) as JSON |
 | `scripts/export_layer.mjs` | export one raster layer of a PSD to PNG |
-| `scripts/set_text_layers.mjs` | replace the text of existing text layers byte-exactly (mode A) |
+| `scripts/set_text_layers.mjs` | replace the text of existing text layers byte-exactly (mode A); the boxes are then fitted to their text |
+| `scripts/fit_boxes.mjs`, `scripts/text_metrics.mjs` | size every text box to show its whole text (real font metrics via node-canvas + fontconfig, Photoshop's leading and baseline rule) and move boxes whose text covers another apart; called by every script that writes text |
+| `scripts/fit_text_boxes.mjs` | apply that to finished PSDs (`--from 150`, `--in-place` or a `textfit` copy, `--dry-run`) |
 | `scripts/add_and_fill_text_layers.mjs` | add boxes with final text in one write (race-free on flaky mounts) |
 | `scripts/scan_placeholders.mjs` | report text layers still holding Lorem ipsum |
 | `scripts/annotate_text_boxes.py` | draw numbered layer boxes over a page for eyeballing indices |

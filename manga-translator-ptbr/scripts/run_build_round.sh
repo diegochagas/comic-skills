@@ -44,11 +44,13 @@ for stem in $stems; do
     [ -e "$cleaned" ] || { echo "FAIL clean $stem"; continue; }
   fi
   (( $(left) < 40 )) && { echo "BUDGET reached (before build $stem)"; exit 2; }
+  # pages that came out of split-scans: the page as scanned is the Original layer
+  orig=(); [ -e "$OUT/split/originals/$stem.png" ] && orig=(--original "$OUT/split/originals/$stem.png")
   if [ "$FORMAT" = xcf ]; then
     python3 ./build_translated_xcf.py "$src" "$blocks" "$WORK/final/${stem}.xcf" --copy-image "$cleaned" --preview "$OUT/preview/${stem}.jpg" || { echo "FAIL build/verify $stem"; rm -f "$WORK/final/${stem}.xcf"; continue; }
   else
-    node --max-old-space-size=3072 ./build_translated_psd.mjs "$src" "$blocks" "$WORK/final/${stem}.psd" --copy-image "$cleaned" || { echo "FAIL build $stem"; continue; }
-    node --max-old-space-size=3072 ./verify_translated_psd.mjs "$WORK/final/${stem}.psd" "$src" "$blocks" --copy-image "$cleaned" || { echo "FAIL verify $stem"; rm -f "$WORK/final/${stem}.psd"; continue; }
+    node --max-old-space-size=3072 ./build_translated_psd.mjs "$src" "$blocks" "$WORK/final/${stem}.psd" --copy-image "$cleaned" "${orig[@]}" || { echo "FAIL build $stem"; continue; }
+    node --max-old-space-size=3072 ./verify_translated_psd.mjs "$WORK/final/${stem}.psd" "$src" "$blocks" --copy-image "$cleaned" "${orig[@]}" || { echo "FAIL verify $stem"; rm -f "$WORK/final/${stem}.psd"; continue; }
     python3 ./preview_psd_text.py "$WORK/final/${stem}.psd" "$cleaned" "$OUT/preview/${stem}.jpg" --max 1400 >/dev/null 2>&1 || echo "WARN preview $stem"
   fi
   cp -f "$WORK/final/${stem}.$FORMAT" "$OUT/${stem}.$FORMAT" && rm -f "$WORK/final/${stem}.$FORMAT" || { echo "FAIL copy $stem"; continue; }

@@ -67,8 +67,8 @@ function buildOne(job) {
         name: `Text ${i + 1}`,
         top: y,
         left: x,
-        bottom: y + h,
-        right: x + w,
+        bottom: y,      // zero-size pixel bounds, as Photoshop saves text layers
+        right: x,       // (GIMP crashes on non-zero bounds with empty channels)
         text: {
           text: PLACEHOLDER_TEXT,
           transform: [1, 0, 0, 1, x, y],

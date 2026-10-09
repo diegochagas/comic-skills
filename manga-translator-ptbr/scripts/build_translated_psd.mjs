@@ -12,6 +12,16 @@
 //   node build_translated_psd.mjs <source_image> <blocks.json> <out.psd>
 //                                 [--font CCWildWords-Regular] [--no-copy]
 //                                 [--copy-image <png>] [--placeholder [text]]
+//                                 [--original <png>] [--no-fit]
+//
+// --original <png>: use this image as the "Original" layer instead of the
+//   source (split-scans writes originals/<page>.png = the page as scanned,
+//   gutter shadow included, next to images/<page>.png = the fixed page the
+//   text is detected on and the Copy is made from).
+// Every translated text box is then sized to show its whole text at its
+// font size and boxes whose text would collide are moved apart
+// (fit_boxes.mjs); --no-fit keeps the blocks' rectangles exactly, and
+// --placeholder boxes are never fitted (they must match the balloons).
 //
 // --placeholder: letter-ready mode (no translation) - every block without a
 //   text gets "Lorem ipsum ..." (or the given text) in a modest font size
@@ -43,6 +53,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { writePsdBuffer } from 'ag-psd';
 import { loadImage, createCanvas } from 'canvas';
+import { fitTextLayers, describeChanges } from './fit_boxes.mjs';
 
 const args = process.argv.slice(2);
 const pos = args.filter((a) => !a.startsWith('--'));
@@ -57,6 +68,8 @@ const WITH_COPY = !args.includes('--no-copy');
 // --copy-image <png>: use this image (e.g. detect_text.py's *_cleaned.png)
 // for the "Copy" layer instead of a pixel-identical duplicate of the source.
 const COPY_IMAGE = opt('--copy-image', null);
+const ORIGINAL_IMAGE = opt('--original', null);
+const NO_FIT = args.includes('--no-fit');
 // --placeholder [text]: fill blocks that have no text with placeholder text
 const PH_IDX = args.indexOf('--placeholder');
 const PLACEHOLDER = PH_IDX === -1 ? null
@@ -147,7 +160,16 @@ async function main() {
 
   const raster = (name, pixels = px) => ({ name, top: 0, left: 0, bottom: H, right: W,
     imageData: { data: pixels, width: W, height: H } });
-  const children = [raster('Original')];
+  let origPx = px;
+  if (ORIGINAL_IMAGE) {
+    const oimg = await loadImage(ORIGINAL_IMAGE);
+    if (oimg.width !== W || oimg.height !== H)
+      throw new Error(`--original ${oimg.width}x${oimg.height} != source ${W}x${H}`);
+    const oc = createCanvas(W, H); const ox = oc.getContext('2d'); ox.drawImage(oimg, 0, 0);
+    const od = ox.getImageData(0, 0, W, H).data;
+    origPx = new Uint8Array(od.buffer, od.byteOffset, od.byteLength);
+  }
+  const children = [raster('Original', origPx)];
   if (WITH_COPY) {
     let copyPx = px;
     if (COPY_IMAGE) {
@@ -173,7 +195,9 @@ async function main() {
     const color = st.color ? hexToRgb(st.color) : autoColor(px, W, x, y, w, h);
     children.push({
       name: `Text ${i + 1}`,
-      top: y, left: x, bottom: y + h, right: x + w,
+      // zero-size pixel bounds, as Photoshop saves text layers (GIMP's loader
+      // crashes on non-zero bounds with empty channels); the box is text.boxBounds
+      top: y, left: x, bottom: y, right: x,
       text: {
         text,
         transform: rotMatrix(rot, x, y, w, h),
@@ -188,8 +212,17 @@ async function main() {
     });
   });
 
+  // placeholder boxes stay exactly the detected balloons (Lorem ipsum is not
+  // the text that has to fit); the fit happens when real text goes in
+  if (!NO_FIT && PLACEHOLDER === null) {
+    const fit = fitTextLayers(children, W, H);
+    if (fit.changes.length) console.log(`text boxes fitted (${fit.changes.length}):\n` + describeChanges(fit));
+  }
   fs.mkdirSync(path.dirname(outPath), { recursive: true });
-  fs.writeFileSync(outPath, writePsdBuffer({ width: W, height: H, children }, { generateThumbnail: false }));
+  // merged preview image = the Copy (or the Original), so file browsers and
+  // tools that only read the composite show the page instead of black
+  const topRaster = [...children].reverse().find((l) => l.imageData);
+  fs.writeFileSync(outPath, writePsdBuffer({ width: W, height: H, children, imageData: topRaster && topRaster.imageData }, { generateThumbnail: false }));
   console.log(`${path.basename(outPath)}: ${W}x${H}, ${children.length - boxes.length} raster + ${boxes.length} text layer(s)${PLACEHOLDER !== null ? ' (placeholder)' : ''}`);
 }
 

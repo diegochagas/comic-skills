@@ -8,7 +8,9 @@
 // duplicate layers (one process's write landing after the other's read).
 // Doing it in one process/one write avoids that race entirely.
 //
-// Usage: node add_and_fill_text_layers.mjs <psd> <page.json> [--output <path>]
+// Usage: node add_and_fill_text_layers.mjs <psd> <page.json> [--output <path>] [--no-fit]
+// The new boxes are grown to show their whole text and moved apart where
+// their text would collide (fit_boxes.mjs) unless --no-fit is given.
 // page.json: { "blocks": [[x,y,w,h], ...], "texts": ["line1", "line2", ...] }
 // blocks[i] gets name "Text {i+1}" and text texts[i]. blocks and texts must
 // be the same length, already in the desired final order.
@@ -16,6 +18,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { readPsd, writePsdBuffer } from 'ag-psd';
+import { fitTextLayers, describeChanges } from './fit_boxes.mjs';
 
 const [psdPath, pageJsonPath] = process.argv.slice(2);
 const outIdx = process.argv.indexOf('--output');
@@ -59,8 +62,8 @@ for (const [i, [x, y, w, h]] of blocks.entries()) {
     name: `Text ${i + 1}`,
     top: y,
     left: x,
-    bottom: y + h,
-    right: x + w,
+    bottom: y,      // zero-size pixel bounds, as Photoshop saves text layers
+    right: x,       // (GIMP crashes on non-zero bounds with empty channels)
     text: {
       text: texts[i],
       transform: [1, 0, 0, 1, x, y],
@@ -83,6 +86,10 @@ for (const [i, [x, y, w, h]] of blocks.entries()) {
   });
 }
 
+if (!process.argv.includes('--no-fit')) {
+  const fit = fitTextLayers(psd.children, psd.width, psd.height);
+  if (fit.changes.length) console.log(`text boxes fitted (${fit.changes.length}):\n` + describeChanges(fit));
+}
 fs.mkdirSync(path.dirname(outPath), { recursive: true });
 fs.writeFileSync(outPath, writePsdBuffer(psd, { generateThumbnail: false }));
 console.log(`${path.basename(outPath)}: wrote ${blocks.length} text layer(s) with final text`);

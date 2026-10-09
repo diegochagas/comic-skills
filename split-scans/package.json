@@ -1,0 +1,10 @@
+{
+  "name": "split-scans",
+  "private": true,
+  "description": "Node deps for psd_io.mjs: ag-psd reads/writes the layered PSDs, canvas moves the raster layers in and out as PNG.",
+  "type": "module",
+  "dependencies": {
+    "ag-psd": "^31.0.2",
+    "canvas": "^3.2.3"
+  }
+}
