@@ -127,6 +127,10 @@ edit them.
   page keeps failing on text/detail. `nano_banana_flash` = cheap layout-only
   reroll, `nano_banana_pro` = better editor. NEVER `gpt_image_2` (the older
   model, 7 credits) or video models.
+- Panel mode also has a free local backend, `gen_panel.py --backend anima`
+  (Anima Turbo in ComfyUI, `anima_panel.py`): text only — no model sheets or
+  scenario images reach it — and it draws no balloons, so the script draws
+  the empty ovals itself. Higgsfield stays the default.
 - Check `higgsfield account status` before generating; warn under 100
   credits, stop and ask under 40.
 - The agent is the orchestrator and QC reviewer; there is NO LLM API usage.

@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
-"""Generate ONE attempt of ONE panel of a page (panel mode) through the Higgsfield CLI.
+"""Generate ONE attempt of ONE panel of a page (panel mode) through the Higgsfield CLI
+(default) or, with --backend anima, the local Anima model in ComfyUI (free; text only,
+see anima_panel.py).
 
 The panel comes from <project>/work/<issue>/panels/page_NN/plan.json
 (plan_panels.py drafts it). What the image model gets:
@@ -16,11 +18,19 @@ The panel comes from <project>/work/<issue>/panels/page_NN/plan.json
 
 Output: work/<issue>/panels/page_NN/panel_KK_tryT.png (+ .prompt.txt with the
 exact prompt and reference list), appended to the panel's "tries" in the
-plan. Prints the PNG path. One call = one generation = credits spent.
+plan. Prints the PNG path. One call = one generation = credits spent (none with anima).
+
+--backend anima (or project.json "backend": "anima"): no reference images reach the
+model, only the panel prose + character design notes; the balloons are drawn by code
+(one empty oval per dialogue line across the top, or where --balloon x,y,w,h puts
+them, fractions of the panel, one per line in order). --seed rerolls. Not with
+--edit-from, --cost, --model, --quality or --resolution.
 
 Usage:
   gen_panel.py -p <project> <issue> <page> <panel> [--fix "..."] [--extra-ref IMG ...]
                [--no-continuity] [--model M] [--quality Q] [--resolution 1k|2k] [--cost] [--dry-run]
+  gen_panel.py -p <project> <issue> <page> <panel> --backend anima [--seed N] [--balloon x,y,w,h ...]
+               [--fix "..."] [--dry-run]
   gen_panel.py -p <project> <issue> <page> <panel> --edit-from IMG --instruction "one change"
 """
 import argparse
@@ -37,6 +47,8 @@ from common import (character_notes, load_charmap, load_job, load_scenemap, load
                     resolve_sheets)
 from gen_page import DESIGN_LOCK, HF, MAX_REFS, NO_LABELS, find_url, run_generation
 from refdesc import describe_own, format_desc, source_descriptions
+
+import anima_panel
 
 ASPECTS = ["1:1", "3:2", "2:3", "4:3", "3:4", "16:9", "9:16", "21:9", "27:16", "16:27", "9:8", "8:9", "4:5", "5:4"]
 
@@ -128,6 +140,48 @@ def build_edit_prompt(instruction: str) -> str:
             "sheets and scenario references only. " + NO_LABELS)
 
 
+def save_try(page_dir: Path, plan_path: Path, panel_no: int, png: bytes, header: str, prompt: str) -> Path:
+    """Write the next panel_KK_tryT.png + its .prompt.txt and append it to the panel's tries."""
+    n = len(list(page_dir.glob(f"panel_{panel_no:02d}_try*.png"))) + 1
+    dst = page_dir / f"panel_{panel_no:02d}_try{n}.png"
+    while dst.exists():
+        n += 1
+        dst = page_dir / f"panel_{panel_no:02d}_try{n}.png"
+    dst.write_bytes(png)
+    dst.with_suffix(".prompt.txt").write_text(header + "\n" + prompt + "\n", encoding="utf-8")
+    plan = json.loads(plan_path.read_text(encoding="utf-8"))      # re-read: the agent may have edited it meanwhile
+    for p in plan["panels"]:
+        if p["id"] == panel_no:
+            p.setdefault("tries", []).append(str(dst))
+            p["chosen"] = None
+    plan_path.write_text(json.dumps(plan, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    return dst
+
+
+def parse_balloon(text: str) -> tuple[float, float, float, float]:
+    """'x,y,w,h' as fractions of the panel, e.g. '0.05,0.05,0.4,0.2'."""
+    try:
+        x, y, w, h = (float(v) for v in text.split(","))
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"--balloon {text!r}: want x,y,w,h fractions, e.g. 0.05,0.05,0.4,0.2")
+    if not (0 <= x < 1 and 0 <= y < 1 and 0 < w <= 1 and 0 < h <= 1):
+        raise argparse.ArgumentTypeError(f"--balloon {text!r}: every value must be a fraction between 0 and 1")
+    return x, y, w, h
+
+
+def run_anima(a: argparse.Namespace, cfg: dict, panel: dict, notes: list[str], page_dir: Path,
+              plan_path: Path) -> None:
+    """--backend anima: one local generation, balloons drawn by code, saved like a Higgsfield try."""
+    if a.dry_run:
+        x, y, w, h = panel["box"]
+        print(f"# panel {a.panel}  box {w}x{h} -> {anima_panel.model_size(w, h)}  backend anima  seed {a.seed}")
+        print(anima_panel.build_prompt(panel, cfg, notes, a.fix))
+        return
+    png, prompt = anima_panel.generate(panel, cfg, notes, a.seed, a.fix, a.balloon or None)
+    header = f"# backend anima ({anima_panel.MODEL['unet']})  seed {a.seed}  balloons drawn by code\n"
+    print(save_try(page_dir, plan_path, a.panel, png, header, prompt))
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--project", "-p", default=None)
@@ -144,6 +198,10 @@ def main() -> None:
     ap.add_argument("--resolution", choices=["1k", "2k", "4k"])
     ap.add_argument("--cost", action="store_true")
     ap.add_argument("--dry-run", action="store_true")
+    ap.add_argument("--backend", choices=["higgsfield", "anima"])
+    ap.add_argument("--seed", type=int, default=7, help="anima: change it to reroll")
+    ap.add_argument("--balloon", action="append", type=parse_balloon, default=[],
+                    help="anima: x,y,w,h of one balloon (fractions of the panel), one per dialogue line")
     a = ap.parse_args()
     if bool(a.edit_from) != bool(a.instruction):
         ap.error("--edit-from and --instruction go together")
@@ -161,6 +219,16 @@ def main() -> None:
 
     charmap, scenemap = load_charmap(pdir), load_scenemap(pdir)
     who = panel["prompt"] + "\n" + " ".join(panel.get("characters", []))
+    backend = a.backend or cfg.get("backend", "higgsfield")
+    if backend == "anima":
+        bad = [f for f, v in (("--edit-from", a.edit_from), ("--cost", a.cost), ("--model", a.model),
+                              ("--quality", a.quality), ("--resolution", a.resolution), ("--extra-ref", a.extra_ref)) if v]
+        if bad:
+            ap.error(f"{', '.join(bad)} need --backend higgsfield (Anima takes no images and is free)")
+        if a.balloon and len(a.balloon) != len(panel.get("dialogue", [])):
+            ap.error(f"{len(a.balloon)} --balloon given, panel {a.panel} has {len(panel.get('dialogue', []))} dialogue line(s)")
+        run_anima(a, cfg, panel, character_notes(charmap, who), page_dir, plan_path)
+        return
     sheets = resolve_sheets(charmap, who)
     scen = [e for e in scenemap.get("map", []) if e["keywords"][0] in panel.get("scenarios", [])]
     scen_imgs = [str(pdir / "refs" / "scenarios" / f) for e in scen for f in e.get("images", [])]
@@ -218,23 +286,11 @@ def main() -> None:
     if not url:
         sys.exit(f"NO_URL {out[:400]}")
 
-    n = len(list(page_dir.glob(f"panel_{a.panel:02d}_try*.png"))) + 1
-    dst = page_dir / f"panel_{a.panel:02d}_try{n}.png"
-    while dst.exists():
-        n += 1
-        dst = page_dir / f"panel_{a.panel:02d}_try{n}.png"
-    urllib.request.urlretrieve(url, dst)
-    dst.with_suffix(".prompt.txt").write_text(
-        f"# aspect {aspect}  model {model} {resolution}\n# references:\n"
-        + "".join(f"#   {r}\n" for r in refs) + "\n" + prompt + "\n", encoding="utf-8")
-
-    plan = json.loads(plan_path.read_text(encoding="utf-8"))      # re-read: the agent may have edited it meanwhile
-    for p in plan["panels"]:
-        if p["id"] == a.panel:
-            p.setdefault("tries", []).append(str(dst))
-            p["chosen"] = None
-    plan_path.write_text(json.dumps(plan, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-    print(dst)
+    with urllib.request.urlopen(url) as resp:
+        png = resp.read()
+    header = (f"# aspect {aspect}  model {model} {resolution}\n# references:\n"
+              + "".join(f"#   {r}\n" for r in refs))
+    print(save_try(page_dir, plan_path, a.panel, png, header, prompt))
 
 
 if __name__ == "__main__":
