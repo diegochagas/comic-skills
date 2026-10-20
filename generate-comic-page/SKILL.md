@@ -281,6 +281,35 @@ usually talks about whole pages).
 5. `make_layout.py` pairs balloons with lines PER PANEL from the sidecar;
    then `build_xcf.py` as usual.
 
+### Local Anima backend (`--backend anima`, free)
+
+`gen_panel.py ... --backend anima` (or `"backend": "anima"` in project.json,
+then `--backend higgsfield` for the panels that need Higgsfield) draws the
+panel with Anima Turbo in the local ComfyUI: no credits, ~20 s per panel,
+bold B&W manga inking (it beat FLUX.2 klein and NoobAI-XL in a 2026-10-20
+comparison). What it gives up:
+- **No images reach it** — model sheets and scenario images are NOT used,
+  only the panel prose and the charmap design descriptions. A character
+  with a model sheet drifts off-model (in the test it could not draw Agumon
+  from the name alone). Use it for establishing shots, backgrounds, crowds,
+  characters without a sheet, or to rough out a page before spending credits.
+- **It cannot draw empty balloons**, so the art comes back without any and
+  the script draws one white oval per `dialogue` line: across the top, in
+  reading order (`"reading": "rtl"` in project.json flips it), sized by word
+  count. Where they cover a face, place them yourself with one
+  `--balloon x,y,w,h` (fractions of the panel) per line, in order — the art
+  is the same for the same `--seed`, so moving balloons costs one ~20 s run.
+- `--seed N` rerolls; `--fix "..."` is appended to the prompt. Not with
+  `--edit-from`, `--cost`, `--model`, `--quality`, `--resolution` or
+  `--extra-ref`. Its negative prompt is ignored (Turbo runs at CFG 1), so
+  say what you want instead of what you don't; `"anima_style"` in
+  project.json replaces the default tags (`monochrome, greyscale, manga,
+  screentone, ink, lineart`). Don't add `comic`: Anima then splits the panel
+  into several.
+- Needs the `anima` model set of local-ai-setup in ComfyUI; the script starts
+  `COMFYUI_SERVICE` (e.g. `comfyui`) when the server is down and stops with
+  the reason when a model file is missing — it never falls back to Higgsfield.
+
 Limits in panel mode: all panels of ONE page per turn (not one generation),
 max one fix per panel before Diego sees the page; the page is still
 approved as a whole with `page_state.py approve`.
@@ -378,7 +407,8 @@ its context) for anyone lettering by hand.
 | `gen_page.py -p P <issue> <page> [...]` | ONE generation / edit / `--cost` / `--dry-run` |
 | `page_state.py -p P next\|show\|set\|approve ...` | what's next, notes, stage, approval |
 | `plan_panels.py -p P <issue> <page> [--force]` | panel mode: draft the page's panel plan (boxes, prompts with empty balloons, lines, scenarios) |
-| `gen_panel.py -p P <issue> <page> <panel> [...]` | panel mode: ONE panel generation — sheets + scenarios as images, source pages and earlier panels as describe-pages text |
+| `gen_panel.py -p P <issue> <page> <panel> [...]` | panel mode: ONE panel generation — sheets + scenarios as images, source pages and earlier panels as describe-pages text; `--backend anima [--seed N] [--balloon x,y,w,h ...]` = free local Anima, text only, balloons drawn by code |
+| `anima_panel.py` | (module) the Anima backend of `gen_panel.py`: ComfyUI client, prompt, balloon drawing |
 | `assemble_page.py -p P <issue> <page> [--preview-only]` | panel mode: compose the chosen panel tries into the page art (free) |
 | `make_layout.py -p P <issue> <page> [--force]` | detect the empty balloons (numbered overlay) and draft the layout JSON with the exact script lines |
 | `build_xcf.py <layout.json>` / `--list-fonts` | layout → `.xcf` with native GIMP text layers + preview JPG (every page) |

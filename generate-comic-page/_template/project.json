@@ -17,6 +17,8 @@
   "panel_gutter": 30,
   "panel_border": 5,
   "panel_resolution": "1k",
+  "_backend": "panel mode: \"higgsfield\" (default) or \"anima\" (free local Anima, text only, see SKILL.md); anima_style replaces its default style tags",
+  "backend": "higgsfield",
   "style_label": "",
   "page_kinds": { "1": "cover", "2": "editorial" },
   "style_refs": {
