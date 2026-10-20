@@ -6,7 +6,7 @@
   "page_header_regex": "^=== PAGE (\\d+)\\s*[—-]\\s*(.*?)\\s*===\\s*$",
   "aspect": "2:3",
   "language": "pt-BR",
-  "lettering": "xcf",
+  "lettering": "psd",
   "lettering_font": "CCWildWords Regular",
   "generation": "page",
   "_panel_mode": "set generation to \"panels\" and fill these: description_sets.source = describe-pages set of the original manga; panel_style = base style for ONE panel",

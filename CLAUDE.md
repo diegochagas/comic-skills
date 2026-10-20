@@ -41,8 +41,10 @@ edit them.
   not committed inside the skills: `manga-translator-ptbr/node_modules/`
   (ag-psd, canvas, pngjs; its package.json is `"type": "module"`),
   `comic-downloader/node_modules/` (axios), `psd-xcf-convert/node_modules/`
-  (ag-psd only - no canvas) and `manga-translator-ptbr/models/`
-  (comic-text-detector + LaMa ONNX).
+  (ag-psd only - no canvas), `generate-comic-page/node_modules/` (ag-psd +
+  pngjs, no canvas: text is measured in Python) and
+  `manga-translator-ptbr/models/` (comic-text-detector + LaMa ONNX, which
+  `generate-comic-page`'s layer separation imports too).
   A skill that needs npm packages gets its own `package.json`; the root
   `.gitignore` already ignores any `node_modules/` and `package-lock.json`.
 - All script paths in the skills are relative to the repo root; Python
@@ -116,21 +118,32 @@ edit them.
   the image model only as describe-pages text; attached images are model
   sheets and scenarios (found by searching the original manga's set).
 - The image model never writes text. EVERY page is generated textless
-  (story pages with empty balloons) and delivered as a GIMP `.xcf` whose
-  text is native text layers: `make_layout.py` (OpenCV balloon detection +
-  the script's exact lines) → agent fixes the pairing on the numbered
-  overlay → `build_xcf.py`. Balloon font: `CCWildWords Regular`
-  (`"lettering_font"`). Text lines are copied from the job, never retyped.
-  `"lettering": "ai"` exists only for projects finished before this.
+  (story pages with empty balloons) and delivered as a layered Photoshop
+  `.psd` whose text is native text boxes: `make_layout.py` (OpenCV panel +
+  balloon detection + the script's exact lines) → agent fixes the pairing
+  and the panel boxes on the overlays → `build_psd.py`, which splits the
+  art into one group per panel (`separate_layers.py`: Background with the
+  rest inpainted away by manga-translator-ptbr's LaMa, Characters matted
+  by BiRefNet in the local ComfyUI through `comfyui.py`, Balloons under the
+  kept text boxes, Border) and writes the file with ag-psd
+  (`build_psd.mjs`), text sizes from fontconfig + Pillow with Photoshop's
+  wrap/leading rules (`psd_text_fit.py`). The flattened layers give the
+  approved art back; the agent checks `layers/page_NN/contact.jpg` and
+  turns `"characters"` off for a panel whose matte is wrong. Balloon font:
+  `CCWildWords Regular` (`"lettering_font"`). Text lines are copied from
+  the job, never retyped. No GIMP in this skill: an XCF is
+  `psd-xcf-convert` on the PSD. `"lettering": "ai"` exists only for
+  projects finished before this.
 - `gpt_image_2_5` at `quality low` / `resolution 2k` is the default — check
   the real price with `gen_page.py ... --cost`; bump `--quality` only if a
   page keeps failing on text/detail. `nano_banana_flash` = cheap layout-only
   reroll, `nano_banana_pro` = better editor. NEVER `gpt_image_2` (the older
   model, 7 credits) or video models.
 - Panel mode also has a free local backend, `gen_panel.py --backend anima`
-  (Anima Turbo in ComfyUI, `anima_panel.py`): text only — no model sheets or
-  scenario images reach it — and it draws no balloons, so the script draws
-  the empty ovals itself. Higgsfield stays the default.
+  (Anima Turbo in ComfyUI, `anima_panel.py` on the shared `comfyui.py`
+  client): text only — no model sheets or scenario images reach it — and it
+  draws no balloons, so the script draws the empty ovals itself. Higgsfield
+  stays the default.
 - Check `higgsfield account status` before generating; warn under 100
   credits, stop and ask under 40.
 - The agent is the orchestrator and QC reviewer; there is NO LLM API usage.

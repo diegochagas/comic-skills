@@ -2,16 +2,19 @@
 
 Gera edições completas de quadrinhos com IA, **uma página por vez, com a sua
 aprovação em cada uma**, e empacota como `.cbz`. **Toda página sai como
-`.xcf` do GIMP com texto editável**: a IA desenha os balões VAZIOS e cada
-balão recebe uma caixa de texto nativa do GIMP na fonte CCWildWords; capa e
-editorial ganham logo/título/corpo também como camadas de texto. A IA nunca
-escreve texto — acabou balão com erro de digitação.
+`.psd` em camadas com texto editável**: a IA desenha os balões VAZIOS, a
+arte é separada em camadas — um grupo por quadro com fundo, personagens,
+balões e borda, cada um na sua camada — e cada balão recebe uma caixa de
+texto nativa do Photoshop na fonte CCWildWords; capa e editorial ganham
+logo/título/corpo também como camadas de texto. A IA nunca escreve texto —
+acabou balão com erro de digitação. Quer GIMP? `psd-xcf-convert` converte o
+PSD mantendo o texto editável.
 
 As instruções que o agente segue estão em [SKILL.md](SKILL.md); este arquivo
 é a visão geral para humanos. Os comandos rodam a partir da raiz do repo.
 
 Os quadrinhos ficam **fora do repo**, em `~/Downloads/<projeto>/` (roteiros,
-refs, renders, `.xcf`, `.cbz`). Outra raiz: variável `COMIC_PROJECTS_DIR`;
+refs, renders, `.psd`, `.cbz`). Outra raiz: variável `COMIC_PROJECTS_DIR`;
 projeto guardado em outro lugar: `-p <caminho da pasta>` em qualquer script.
 
 ## Como funciona
@@ -20,7 +23,8 @@ projeto guardado em outro lugar: `-p <caminho da pasta>` em qualquer script.
 | ------------------------ | ---------------------------------------------------------------- | ----- |
 | Orquestração + QC visual | **o agente** (Claude Code / Codex, skill `/generate-comic-page`) | incluso na assinatura — **sem API LLM** |
 | Geração de imagem        | **Higgsfield CLI** — `gpt_image_2_5` low/2k                      | créditos do plano Plus (1000/mês); preço real: `gen_page.py ... --cost` |
-| Letreiramento (toda pág.) | **OpenCV** acha os balões vazios + **GIMP 3 headless** (flatpak) cria as caixas de texto CCWildWords | zero |
+| Letreiramento (toda pág.) | **OpenCV** acha os quadros e os balões vazios; **ag-psd** escreve o PSD com caixas de texto CCWildWords nativas | zero |
+| Separação em camadas      | **LaMa** (inpaint, CPU) + **BiRefNet** no ComfyUI local recortam personagens, balões e bordas de cada quadro | zero |
 | Parsing, estado, CBZ     | scripts Python locais (`scripts/`)                               | zero |
 
 O fluxo por página:
@@ -32,24 +36,30 @@ O fluxo por página:
 2. O agente gera **uma** página com balões vazios (`gen_page.py`) e confere
    ele mesmo (personagens contra os sheets, nenhuma letra na arte, um balão
    por fala, beats). Depois letreira de graça: `make_layout.py` detecta os
-   balões e monta o rascunho com as falas exatas do roteiro, o agente
-   confere pelo overlay numerado qual fala vai em qual balão, e
-   `build_xcf.py` gera `out/xcf/<ed>/page_NN.xcf` + preview. Ele te mostra
-   o preview letreirado com um relatório honesto.
+   quadros e os balões e monta o rascunho com as falas exatas do roteiro, o
+   agente confere pelos overlays qual fala vai em qual balão, e
+   `build_psd.py` separa a arte em camadas e gera
+   `out/psd/<ed>/page_NN.psd` + preview. Ele te mostra o preview
+   letreirado com um relatório honesto.
 3. Você responde:
    - **ok** → a página é aprovada e ele pergunta se gera a próxima;
    - **mudanças específicas** → edição pontual (uma mudança por edição) ou
      nova geração com a correção; mudança só de texto/fonte/tamanho é de
-     graça (mexe no layout e refaz o XCF);
+     graça (mexe no layout e refaz o PSD);
    - **mais exemplos** → ele importa, atualiza o charmap e refaz a página.
 4. **Capa e editorial**: primeiro você aprova a arte SEM texto, depois o
    agente desenha o layout — logo, número, preço, título, corpo do
-   editorial — como camadas de texto do GIMP (aqui as fontes são de título,
-   não CCWildWords). Você aprova pelo preview e recebe o `.xcf`.
+   editorial — como caixas de texto do Photoshop (aqui as fontes são de
+   título, não CCWildWords). Você aprova pelo preview e recebe o `.psd`.
 
-A página aprovada que vai pro `.cbz` é o preview do XCF
-(`work/<ed>/approved/page_NN.jpg`); se você retocar o XCF no GIMP, exporte
-por cima desse JPG.
+Camadas do PSD, de baixo pra cima: `Art (flat)` (a arte aprovada inteira,
+oculta, só referência), `Paper`, um grupo `Panel NN` por quadro com
+`Background` / `Characters` / `Balloons` / `Border`, camadas de imagem da
+capa (logo, fan art) e o grupo `Text` com uma caixa por balão/título.
+
+A página aprovada que vai pro `.cbz` é o preview do PSD
+(`work/<ed>/approved/page_NN.jpg`); se você retocar o PSD no Photoshop,
+exporte por cima desse JPG.
 
 Não existe modo lote: o modelo alucina design com frequência, então nada é
 gerado sem você ter visto a página anterior.
@@ -60,11 +70,13 @@ gerado sem você ter visto a página anterior.
 npm i -g @higgsfield/cli
 higgsfield auth login                 # login na conta Higgsfield (navegador)
 npx skills add higgsfield-ai/skills   # skills higgsfield-* em .agents/skills/
-curl -fLO https://github.com/diegochagas/gimphoto/releases/latest/download/GIMPhoto.flatpak && flatpak install --user GIMPhoto.flatpak # gera os .xcf (obrigatório)
-# fonte CCWildWords instalada no sistema (o GIMP precisa enxergar: build_xcf.py --list-fonts wild)
+bash generate-comic-page/setup.sh    # node_modules (ag-psd, pngjs) + checa as ferramentas
+# fonte CCWildWords instalada no sistema (build_psd.py --list-fonts wild)
+# ComfyUI local com BiRefNet (local-ai-setup) para a camada de personagens; sem ele: build_psd.py --no-characters
 ```
 
-Python: o `venv/` criado por `<repo>/setup.sh` (Pillow, OpenCV, numpy).
+Python: o `venv/` criado por `<repo>/setup.sh` (Pillow, OpenCV, numpy,
+onnxruntime); o LaMa de `manga-translator-ptbr/models/` (seu `setup.sh`).
 
 ## Uso
 
@@ -78,8 +90,8 @@ python3 generate-comic-page/scripts/split_scripts.py -p meu-quadrinho
 # no agente:
 #   /generate-comic-page meu-quadrinho 1                 → próxima página da edição 1
 #   /generate-comic-page meu-quadrinho 1 7               → página 7
-#   /generate-comic-page meu-quadrinho 1 cover           → capa (.xcf)
-#   /generate-comic-page meu-quadrinho 1 editorial       → editorial (.xcf)
+#   /generate-comic-page meu-quadrinho 1 cover           → capa (.psd)
+#   /generate-comic-page meu-quadrinho 1 editorial       → editorial (.psd)
 #   /generate-comic-page meu-quadrinho 1 ~/mais-exemplos → importa exemplos e segue
 
 python3 generate-comic-page/scripts/status.py                          # progresso
@@ -95,8 +107,10 @@ python3 generate-comic-page/scripts/assemble_cbz.py -p meu-quadrinho 1 # → out
 | `scripts/split_scripts.py -p <proj> [ed...]` | roteiro por edição → `jobs/<ed>/page_NN.json` (+ `work/<ed>/state.json`, preservando estados) |
 | `scripts/gen_page.py -p <proj> <ed> <pág>` | UMA geração (ou `--edit-from`, `--fix`, `--cost`, `--dry-run`) |
 | `scripts/page_state.py -p <proj> next\|show\|set\|approve` | próxima página, notas, estágio, aprovação |
-| `scripts/make_layout.py -p <proj> <ed> <pág> [--force]` | detecta os balões vazios (overlay numerado) e rascunha o layout com as falas exatas do roteiro |
-| `scripts/build_xcf.py <layout.json>` / `--list-fonts` | layout → `.xcf` com camadas de texto nativas + preview JPG, para toda página (`gimp_layout_job.py` roda dentro do GIMP) |
+| `scripts/make_layout.py -p <proj> <ed> <pág> [--force]` | detecta os quadros e os balões vazios (dois overlays) e rascunha o layout com as falas exatas do roteiro |
+| `scripts/build_psd.py <layout.json> [--no-characters] [--force-layers]` / `--list-fonts` | layout → `.psd` em camadas (grupo por quadro + caixas de texto nativas) + preview JPG, para toda página; roda `separate_layers.py` quando as camadas não existem ou são mais velhas que a arte; `build_psd.mjs` (ag-psd) escreve e relê o arquivo |
+| `scripts/separate_layers.py <layout.json>` | só a separação: LaMa + BiRefNet → `work/<ed>/layers/page_NN/` + `contact.jpg` |
+| `scripts/balloons.py`, `panels.py`, `psd_text_fit.py`, `page_preview.py`, `comfyui.py` | módulos: balões, quadros, fontes/tamanhos das caixas, preview, cliente ComfyUI |
 | `scripts/status.py [-p <proj>]` | aprovadas / pendentes / aguardando revisão |
 | `scripts/make_lettering_guide.py -p <proj> <ed>` | lista de todas as falas por página, pra quem for letreirar à mão |
 | `scripts/assemble_cbz.py -p <proj> <ed>` | páginas aprovadas → `out/*.cbz` |
@@ -109,5 +123,5 @@ Projetos criados antes desta versão (ex. `megaman-nam`) funcionam sem
 re-split: passe `-p <caminho da pasta>` ou mova a pasta para `~/Downloads/`.
 O tipo da página (capa/editorial) é deduzido do título quando o job não tem
 `kind`. Eles têm `"lettering": "ai"` no project.json (texto renderizado pela
-IA, sem XCF nas páginas de história) e continuam assim; projeto novo nasce
-com `"lettering": "xcf"`.
+IA, sem PSD nas páginas de história) e continuam assim; projeto novo nasce
+com `"lettering": "psd"` (`"xcf"` em projeto da época do GIMP vale o mesmo).

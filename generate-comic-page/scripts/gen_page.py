@@ -27,8 +27,8 @@ Usage:
 
 Every page is generated TEXTLESS — story pages with EMPTY balloons/caption
 boxes, covers and editorials (see common.page_kind) with clean areas for the
-type — and its text is added afterwards as editable GIMP text layers
-(make_layout.py + build_xcf.py). Only a project whose project.json says
+type — and its text is added afterwards as editable Photoshop text layers
+(make_layout.py + build_psd.py). Only a project whose project.json says
 "lettering": "ai" (legacy) has the model render the dialogue itself.
 """
 import argparse
@@ -108,7 +108,7 @@ def build_prompt(job: dict, cfg: dict, kind: str, notes: list[str], fix: str | N
         parts.append(SUFFIX_COVER)
     elif kind == "editorial":
         parts.append(SUFFIX_EDITORIAL)
-    elif cfg.get("lettering", "xcf") != "ai":
+    elif cfg.get("lettering", "psd") != "ai":
         parts.append(SUFFIX_MANUAL)
     else:                                   # legacy: text baked into the image by the model
         lang = cfg.get("language", job.get("language", "en"))

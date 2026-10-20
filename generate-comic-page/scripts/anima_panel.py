@@ -18,29 +18,20 @@ the automatic placement, one box per line in order.
 Needs (installed by local-ai-setup with COMFYUI_MODEL_SETS including
 "anima"): diffusion_models/anima-turbo-v1.1.safetensors,
 text_encoders/qwen_3_06b_base.safetensors, vae/qwen_image_vae.safetensors.
-Env: COMFYUI_URL (default http://127.0.0.1:8188), COMFYUI_SERVICE (a systemd
---user unit started when the server is down, e.g. comfyui).
+Server access (COMFYUI_URL / COMFYUI_SERVICE) is comfyui.py's.
 
 Example:
     png = generate(panel, cfg, notes=["Ryo: spiky brown hair, goggles"], seed=7)
 """
-import json
 import math
-import os
 import re
-import subprocess
 import sys
-import time
-import urllib.error
-import urllib.parse
-import urllib.request
 
 import cv2
 import numpy as np
 
-URL = os.environ.get("COMFYUI_URL", "http://127.0.0.1:8188").rstrip("/")
-SERVICE = os.environ.get("COMFYUI_SERVICE", "")
-TIMEOUT = int(os.environ.get("COMFYUI_TIMEOUT", "600"))
+import comfyui
+
 MODEL = {"unet": "anima-turbo-v1.1.safetensors", "clip": "qwen_3_06b_base.safetensors",
          "vae": "qwen_image_vae.safetensors"}
 MODEL_MP = 1.0                      # Anima works between 512² and 1536²
@@ -53,40 +44,14 @@ NEGATIVE = ("worst quality, low quality, score_1, score_2, score_3, blurry, jpeg
 BALLOON_RE = re.compile(r"(?:\s*,|\s+and)?\s*\(an EMPTY balloon sized for about \d+ words?\)")
 
 
-def _get(path: str, timeout: int = 10) -> bytes:
-    with urllib.request.urlopen(URL + path, timeout=timeout) as r:
-        return r.read()
-
-
-def _start_service() -> bool:
-    if not SERVICE:
-        return False
-    print(f"anima_panel: starting systemd --user unit {SERVICE} ...", file=sys.stderr)
-    subprocess.run(["systemctl", "--user", "start", SERVICE], check=False)
-    for _ in range(90):
-        time.sleep(2)
-        try:
-            _get("/system_stats", 3)
-            return True
-        except (urllib.error.URLError, OSError):
-            pass
-    return False
-
-
 def missing_models() -> list[str]:
     """Model files ComfyUI does not have (empty = ready). Starts COMFYUI_SERVICE
     once when the server is down; exits with the reason when it stays down."""
-    for attempt in range(2):
-        try:
-            have = set()
-            for kind in ("diffusion_models", "text_encoders", "vae"):
-                have |= set(json.loads(_get(f"/models/{kind}")))
-            return [f for f in MODEL.values() if f not in have]
-        except (urllib.error.URLError, OSError):
-            if attempt or not _start_service():
-                sys.exit(f"ERROR ComfyUI not reachable at {URL} — start it with "
-                         f"systemctl --user start {SERVICE or 'comfyui'} (or set COMFYUI_SERVICE)")
-    return list(MODEL.values())
+    comfyui.ensure_server()
+    have: set[str] = set()
+    for kind in ("diffusion_models", "text_encoders", "vae"):
+        have |= comfyui.model_files(kind)
+    return [f for f in MODEL.values() if f not in have]
 
 
 def model_size(box_w: float, box_h: float) -> tuple[int, int]:
@@ -108,8 +73,7 @@ def build_prompt(panel: dict, cfg: dict, notes: list[str], fix: str | None) -> s
 
 
 def workflow(prompt: str, w: int, h: int, seed: int) -> dict:
-    def node(cls: str, **inputs) -> dict:
-        return {"class_type": cls, "inputs": inputs}
+    node = comfyui.node
     return {
         "1": node("UNETLoader", unet_name=MODEL["unet"], weight_dtype="default"),
         "2": node("CLIPLoader", clip_name=MODEL["clip"], type="stable_diffusion", device="default"),
@@ -123,31 +87,6 @@ def workflow(prompt: str, w: int, h: int, seed: int) -> dict:
         "8": node("VAEDecode", samples=["7", 0], vae=["3", 0]),
         "9": node("PreviewImage", images=["8", 0]),
     }
-
-
-def run_workflow(wf: dict) -> np.ndarray:
-    req = urllib.request.Request(URL + "/prompt", json.dumps({"prompt": wf}).encode(),
-                                 {"Content-Type": "application/json"})
-    try:
-        pid = json.load(urllib.request.urlopen(req, timeout=30))["prompt_id"]
-    except urllib.error.HTTPError as e:
-        sys.exit(f"ERROR ComfyUI rejected the Anima workflow: {e.read().decode()[:500]}")
-    end = time.time() + TIMEOUT
-    while time.time() < end:
-        time.sleep(2)
-        hist = json.loads(_get(f"/history/{pid}"))
-        if pid in hist:
-            return _result_image(hist[pid])
-    sys.exit(f"ERROR Anima run timed out after {TIMEOUT}s")
-
-
-def _result_image(entry: dict) -> np.ndarray:
-    status = entry["status"]
-    if status.get("status_str") != "success":
-        sys.exit(f"ERROR Anima run failed: {json.dumps(status.get('messages'))[-500:]}")
-    img = next(i for o in entry["outputs"].values() for i in o.get("images", []))
-    q = urllib.parse.urlencode({"filename": img["filename"], "subfolder": img["subfolder"], "type": img["type"]})
-    return cv2.imdecode(np.frombuffer(_get(f"/view?{q}", 60), np.uint8), cv2.IMREAD_COLOR)
 
 
 def auto_balloons(word_counts: list[int], rtl: bool = False) -> list[tuple[float, float, float, float]]:
@@ -197,7 +136,7 @@ def generate(panel: dict, cfg: dict, notes: list[str], seed: int, fix: str | Non
     _x, _y, bw, bh = panel["box"]
     w, h = model_size(bw, bh)
     prompt = build_prompt(panel, cfg, notes, fix)
-    art = run_workflow(workflow(prompt, w, h, seed))
+    art = comfyui.result_image(comfyui.run(workflow(prompt, w, h, seed)))
     lines = panel.get("dialogue", [])
     boxes = balloons or auto_balloons([len(str(t).split()) for t in lines], cfg.get("reading") == "rtl")
     png = cv2.imencode(".png", draw_balloons(art, boxes))[1].tobytes()
