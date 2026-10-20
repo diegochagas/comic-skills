@@ -1,8 +1,8 @@
 # comic-skills
 
 Diego's agent skills for making and working with comics and manga: an AI
-comic studio (page scripts → AI-generated pages reviewed one by one, cover
-and editorial as editable GIMP `.xcf` → `.cbz`), manga scans →
+comic studio (page scripts → AI-generated pages reviewed one by one, every
+page a layered Photoshop `.psd` with editable text → `.cbz`), manga scans →
 letter-ready or PT-BR-translated layered PSD/XCF files (text boxes sized to
 show their whole text), a double-page scan splitter (one flattened PSD per
 page, gutter shadow turned back into paper), a pattern-based
@@ -33,7 +33,7 @@ Flat, one directory per skill:
 The only shared, machine-generated piece at the repo root is `venv/` (Python
 deps for every skill), created by **`./setup.sh`**, which then runs every
 `<skill>/setup.sh`. Everything else a skill needs lives inside it: `node_modules/` from its own
-`package.json` (`manga-translator-ptbr`, `comic-downloader`, `psd-xcf-convert`),
+`package.json` (`manga-translator-ptbr`, `comic-downloader`, `psd-xcf-convert`, `generate-comic-page`),
 `manga-translator-ptbr/models/` (all
 installed by `setup.sh`, all gitignored by the root `.gitignore`). The AI
 comic projects of `generate-comic-page` live outside the repo, in
@@ -44,7 +44,7 @@ the repo root.
 
 | Skill | Scripts | What it does |
 | --- | --- | --- |
-| [`generate-comic-page`](generate-comic-page/) ([README](generate-comic-page/README.md)) | `new_project.py`, `import_refs.py`, `split_scripts.py`, `gen_page.py`, `plan_panels.py`, `gen_panel.py`, `anima_panel.py`, `assemble_page.py`, `refdesc.py`, `make_layout.py`, `build_xcf.py`, `page_state.py`, `gimp_layout_job.py`, `status.py`, `make_lettering_guide.py`, `assemble_cbz.py`, `common.py`, `_template/` | AI comic studio, ONE page at a time with Diego approving each: imports a folder of character model-sheet examples (the agent writes a design description per character that locks every prompt), splits per-issue scripts into page jobs, generates a single TEXTLESS page through Higgsfield (`gpt_image_2_5`, empty balloons), self-QCs it, letters it for free — OpenCV finds the empty balloons, headless GIMP writes an `.xcf` with one native editable text box per balloon in CCWildWords — shows the lettered preview, then approves / applies the requested changes (single-change edits, rerolls, or free text-only layout edits) / imports more examples — and asks before generating the next page. Cover and editorial get their logo/title/body as text layers the same way. Every page's deliverable is an `.xcf`. Packs approved pages into `.cbz`. Optional panel mode: each panel is its own generation (model sheets + scenario images found in the original manga's describe-pages set), comic pages go in only as describe-pages text, and the page is assembled by code; a panel can also be drawn for free by a local Anima model in ComfyUI (`--backend anima`: text only, balloons drawn by code). Projects live in `~/Downloads/<project>/`. |
+| [`generate-comic-page`](generate-comic-page/) ([README](generate-comic-page/README.md)) | `new_project.py`, `import_refs.py`, `split_scripts.py`, `gen_page.py`, `plan_panels.py`, `gen_panel.py`, `anima_panel.py`, `comfyui.py`, `assemble_page.py`, `refdesc.py`, `make_layout.py`, `balloons.py`, `panels.py`, `separate_layers.py`, `build_psd.py`, `build_psd.mjs`, `psd_text_fit.py`, `page_preview.py`, `page_state.py`, `status.py`, `make_lettering_guide.py`, `assemble_cbz.py`, `common.py`, `_template/` | AI comic studio, ONE page at a time with Diego approving each: imports a folder of character model-sheet examples (the agent writes a design description per character that locks every prompt), splits per-issue scripts into page jobs, generates a single TEXTLESS page through Higgsfield (`gpt_image_2_5`, empty balloons), self-QCs it, letters and layers it for free — OpenCV finds the panels and the empty balloons, the art is split into one layer group per panel (Background with everything else inpainted away by LaMa, Characters matted by BiRefNet in the local ComfyUI, Balloons, Border) and ag-psd writes a `.psd` with one native editable Photoshop text box per balloon in CCWildWords — shows the lettered preview, then approves / applies the requested changes (single-change edits, rerolls, or free text-only layout edits) / imports more examples — and asks before generating the next page. Cover and editorial get their logo/title/body as text layers the same way. Every page's deliverable is a layered `.psd` (XCF via `psd-xcf-convert` on request). Packs approved pages into `.cbz`. Optional panel mode: each panel is its own generation (model sheets + scenario images found in the original manga's describe-pages set), comic pages go in only as describe-pages text, and the page is assembled by code; a panel can also be drawn for free by a local Anima model in ComfyUI (`--backend anima`: text only, balloons drawn by code). Projects live in `~/Downloads/<project>/`. |
 | [`manga-translator-ptbr`](manga-translator-ptbr/) ([README](manga-translator-ptbr/README.md)) | `detect_text.py`, `inpaint_lama.py`, `inpaint_qwen.py`, `detect_blocks.py`, `merge_columns.py`, `overlay_tiles.py`, `block_sheets.py`, `page_views.py`, `assemble_translation.py`, `merge_translations.py`, `clean_blocks.py`, `ensure_upright.py`, `build_translated_psd.mjs`, `build_translated_xcf.py`, `gimp_xcf_job.py`, `verify_translated_psd.mjs`, `validate_psds.mjs`, `preview_psd_text.py`, `build_two_source_psd.mjs`, `list_layers.mjs`, `list_text_layers.mjs`, `export_layer.mjs`, `set_text_layers.mjs`, `add_and_fill_text_layers.mjs`, `scan_placeholders.mjs`, `annotate_text_boxes.py`, `run_letter_round.sh`, `run_detect_round.sh`, `run_build_round.sh`, `run_apply_round.sh`, `examples/` | Manga/doujinshi/art-book scans → layered PSDs (Photoshop text boxes) or XCFs (native GIMP text layers, via headless GIMP): `Original` + `Copy` with the text erased (solid fill on plain backgrounds, LaMa - or a local Qwen-Image-Edit with `INPAINT=qwen` - inpainting over art) + one editable Photoshop paragraph text box per block. Mode C leaves "Lorem ipsum" in CCWildWords for a human letterer, fully automatic. Mode B (any scan size, tiled detection for 7000×10000 pages with tiny print) has the agent review the boxes, merge Japanese columns into paragraphs and write the Brazilian Portuguese itself. Mode A fills the placeholder boxes of existing PSDs. ONNX detection + ag-psd; GIMP only for XCF output. |
 | [`split-scans`](split-scans/) | `split_scans.py`, `page_geometry.py`, `psd_io.mjs` | Flatbed scans of an open book (`082-083.jpg` / `.psd`) → one **PSD per page** (`082.psd` + `083.psd`; `--rtl` for manga, whose first number is the right page): each page flattened by a perspective warp from its four paper edges (skew and the keystone of a curved book), cropped to the paper (scanner background and lid gone) and its spine shadow turned back into white paper (the shadow band divided by its illumination, the unrecoverable core inpainted with LaMa). A drawing that runs across the spine stays one file with the middle rebuilt (`--spread`); single-page scans are flattened and cropped, a blank facing page dropped. Layer `Original` = the page as scanned, above it the fixed page; a PSD input keeps all its layers and its text boxes move with their page. Dry run + review sheets first, the agent decides spreads and reading order. Runs first inside `manga-translator-ptbr` for `NNN-MMM` scans. |
 | [`clean-texts`](clean-texts/) | `clean_texts.py` | Erases the text of an image or of every image in a folder through Higgsfield (`gpt_image_2_5`) - or, with `--backend local`, free and offline through the text detector + a local Qwen-Image-Edit in ComfyUI - and changes nothing else: the source is mirror-padded to an aspect ratio the model accepts and the output brought back to its exact geometry, then only the regions where text was erased are taken from the model — every other pixel is the original's. `--language` erases only the text in one language; `--keep` protects what is named; `--reuse-raw` with `--drop-region` / `--restore-threshold` fixes a result for free. The agent QCs every result. PNGs with the original names. |
@@ -135,6 +135,8 @@ a newly added skill.
 | LaMa inpainting model | [Carve/LaMa-ONNX](https://huggingface.co/Carve/LaMa-ONNX) | `manga-translator-ptbr/models/lama_fp32.onnx` | `manga-translator-ptbr/setup.sh` |
 | ag-psd, canvas, pngjs | npm (`manga-translator-ptbr/package.json`) | `manga-translator-ptbr/node_modules/` | `<skill>/setup.sh` (npm install) |
 | ag-psd | npm (`psd-xcf-convert/package.json`) | `psd-xcf-convert/node_modules/` | `<skill>/setup.sh` (npm install) |
+| ag-psd, pngjs | npm (`generate-comic-page/package.json`) | `generate-comic-page/node_modules/` | `<skill>/setup.sh` (npm install) |
+| BiRefNet General (character matte) + Anima Turbo (free panels) | local ComfyUI installed by [local-ai-setup](https://github.com/diegochagas/local-ai-setup) (`ComfyUI_BiRefNet_ll`, `models/BiRefNet/General.safetensors`) | ComfyUI's models folder | local-ai-setup; `generate-comic-page/setup.sh` only checks |
 | axios | npm (`comic-downloader/package.json`) | `comic-downloader/node_modules/` | `<skill>/setup.sh` (npm install) |
 | Qwen3-VL 4B vision model | [Ollama library `qwen3-vl:4b`](https://ollama.com/library/qwen3-vl) | Ollama's model store (3.3 GB) | `describe-pages/setup.sh` (`ollama pull qwen3-vl:4b`) |
 
@@ -179,8 +181,11 @@ System requirements, by skill:
 - `comic-downloader`: Node.js only.
 - `clean-texts`: the Higgsfield CLI logged in (same account as below).
 - `generate-comic-page`: the Higgsfield CLI logged in to a Higgsfield account
-  (Plus plan, 1000 credits/month); GIMPhoto (flatpak GIMP 3) and the `CCWildWords`
-  font visible to it (every page is delivered as an `.xcf`).
+  (Plus plan, 1000 credits/month); Node.js + npm (ag-psd writes the PSDs);
+  the `CCWildWords` font installed (fontconfig); the LaMa model of
+  `manga-translator-ptbr/models/` (layer separation); a local ComfyUI with
+  BiRefNet for the Characters layers (`build_psd.py --no-characters`
+  without it). No GIMP: every page is delivered as a layered `.psd`.
 - `comic-archive`: `unrar` or `7z` only for RAR-based `.cbr` files.
 - `describe-pages`: [Ollama](https://ollama.com) running, with `qwen3-vl:4b`
   (any vision-capable model works via `--model`); a GPU with ~4 GB free
@@ -201,7 +206,7 @@ place.
 
 | Skill | Default result location |
 | --- | --- |
-| `generate-comic-page` | `~/Downloads/<project>/` (`out/xcf/`, `out/*.cbz`) |
+| `generate-comic-page` | `~/Downloads/<project>/` (`out/psd/`, `out/*.cbz`) |
 | `manga-translator-ptbr` | `~/Downloads/<source folder name>/` (PSD/XCF + `preview/`, `detect/`, `work/`) |
 | `split-scans` | `~/Downloads/<source folder name> split/` (`<page>.psd`, `review/`, `report.jsonl`; `images/` + `originals/` with `--also-images`) |
 | `clean-texts` | `~/Downloads/<name>.png` (one image), `~/Downloads/<folder> clean/<name>.png` (+ `clean-texts-work/`) |

@@ -1,0 +1,10 @@
+{
+  "name": "generate-comic-page",
+  "private": true,
+  "description": "Node deps for build_psd.mjs: ag-psd writes the layered PSD with native Photoshop text layers, pngjs reads the layer PNGs.",
+  "type": "module",
+  "dependencies": {
+    "ag-psd": "^31.0.2",
+    "pngjs": "^7.0.0"
+  }
+}

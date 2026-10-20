@@ -1,6 +1,6 @@
 ---
 name: generate-comic-page
-description: Generate an AI comic ONE page at a time through Higgsfield (optionally panel by panel, with comic pages sent as describe-pages text and scenarios found in the original manga's descriptions), with Diego reviewing every page before the next one. EVERY page is delivered as a GIMP .xcf with editable text - story pages are drawn with EMPTY speech balloons and get one native GIMP text box per balloon in the CCWildWords font, and the COVER and the EDITORIAL get their logo/title/body copy as text layers too. Takes a folder of character model-sheet examples the first time, then loops per page - generate, self-QC, show Diego, and on his answer either approve (and ask whether to generate the next page), apply the specific changes he asks for, or import more examples and retry. Use when the user asks to generate/continue/fix a comic page, make the cover or the editorial of an issue, start a new AI comic from model sheets, or says things like "/generate-comic-page megaman-nam 17", "gera a próxima página", "faz a capa da edição 18", "gera o editorial", "continua o quadrinho", "aqui tem mais exemplos do personagem".
+description: Generate an AI comic ONE page at a time through Higgsfield (optionally panel by panel, with comic pages sent as describe-pages text and scenarios found in the original manga's descriptions), with Diego reviewing every page before the next one. EVERY page is delivered as a layered Photoshop .psd - the art split into layers (one group per panel with its background, characters, balloons and border) and every text as a native editable text box: story pages are drawn with EMPTY speech balloons and get one CCWildWords text box per balloon, and the COVER and the EDITORIAL get their logo/title/body copy as text layers too. Takes a folder of character model-sheet examples the first time, then loops per page - generate, self-QC, show Diego, and on his answer either approve (and ask whether to generate the next page), apply the specific changes he asks for, or import more examples and retry. Use when the user asks to generate/continue/fix a comic page, make the cover or the editorial of an issue, start a new AI comic from model sheets, or says things like "/generate-comic-page megaman-nam 17", "gera a próxima página", "faz a capa da edição 18", "gera o editorial", "continua o quadrinho", "aqui tem mais exemplos do personagem".
 ---
 
 # generate-comic-page
@@ -12,9 +12,18 @@ Higgsfield draws, through its CLI, billed in credits to Diego's Plus plan
 
 **The image model never writes the text.** Every page is generated
 TEXTLESS — story pages with empty balloons and caption boxes — and the
-text goes in afterwards as native GIMP text layers (font `CCWildWords
-Regular`), so the deliverable of every page is an `.xcf` Diego can retype
-and restyle, and no credit is ever burned on a misspelled balloon.
+text goes in afterwards as native Photoshop text boxes (font `CCWildWords
+Regular`), so no credit is ever burned on a misspelled balloon.
+
+**The deliverable of every page is a layered `.psd`.** After the art is
+approved it is split, for free and offline, into one layer group per panel
+— `Background` (the panel with everything else inpainted away), `Characters`
+(a BiRefNet matte in the local ComfyUI), `Balloons` (the empty balloons with
+their outlines) and `Border` (the drawn frame) — over a `Paper` layer, with
+the flat art kept hidden as `Art (flat)` and every text box in a `Text`
+group. Diego can move a character, restyle a balloon or retype a line in
+Photoshop. A GIMP file is one conversion away
+(`psd-xcf-convert/scripts/convert.py <page.psd> --to xcf`, text stays editable).
 
 **The rule that shapes everything: ONE page per turn, and Diego approves
 every page.** The image model hallucinates character designs often enough
@@ -24,8 +33,10 @@ his answer. Never start the next page without an explicit yes.
 
 `<repo>` is the comic-skills checkout (the folder holding `setup.sh`); run
 the scripts from there with `venv/bin/python` (plain `python3` works too for
-everything except `assemble_cbz.py`/`build_xcf.py`/`make_layout.py`, which
-need the venv's Pillow / OpenCV).
+everything except `assemble_cbz.py`/`make_layout.py`/`separate_layers.py`/
+`build_psd.py`, which need the venv's Pillow / OpenCV / onnxruntime;
+`build_psd.py` also needs `node` + `generate-comic-page/node_modules`, made by
+`generate-comic-page/setup.sh`).
 
 ## Where things live
 
@@ -46,10 +57,12 @@ Comic projects live OUTSIDE the repo, in `~/Downloads/<project>/`
   jobs/<issue>/page_NN.json      one job per page (made by split_scripts.py)
   work/<issue>/gen/              every art attempt (textless): page_NN_tryK.png
   work/<issue>/panels/page_NN/   panel mode: plan.json + panel_KK_tryT.png (+ .prompt.txt)
-  work/<issue>/layout/           page_NN.balloons.jpg (numbered overlay), page_NN.layout.json, page_NN_preview.jpg
+  work/<issue>/layout/           page_NN.balloons.jpg + page_NN.panels.jpg (overlays), page_NN.layout.json, page_NN_preview.jpg
+  work/<issue>/layers/page_NN/   the art split per panel: panel_KK_{background,characters,balloons,border}.png,
+                                 layers.json, contact.jpg (look at it)
   work/<issue>/approved/         the approved lettered page_NN.jpg (what goes in the .cbz)
   work/<issue>/state.json        per-page status
-  out/xcf/<issue>/page_NN.xcf    THE DELIVERABLE: art + editable text layers
+  out/psd/<issue>/page_NN.psd    THE DELIVERABLE: layered art + editable text boxes
   out/                           .cbz, lettering guides
 ```
 
@@ -148,16 +161,21 @@ character, broken anatomy, letters on the art), you may fix it once before showi
 tools of step 5). **At most 2 generations per turn without Diego seeing a result** —
 then show what you have, problems included.
 
-### 3. Letter it → `.xcf` (free, no credits)
+### 3. Letter and layer it → `.psd` (free, no credits)
 
 1. `venv/bin/python generate-comic-page/scripts/make_layout.py -p <project>
-   <issue> <page>` finds the empty balloons of the latest attempt, writes a
-   numbered overlay `layout/page_NN.balloons.jpg` and a draft
-   `layout/page_NN.layout.json`: one text layer per balloon (CCWildWords
-   Regular, black, centred, auto-sized to ONE uniform size per page) filled
-   with the `dialogue_exact` lines in script order.
-2. **Read the overlay** and fix the draft JSON — the pairing is only
-   "reading order vs script order":
+   <issue> <page>` finds the panels and the empty balloons of the latest
+   attempt, writes the overlays `layout/page_NN.panels.jpg` (green boxes,
+   `P1 b5` = panel 1 with a 5 px border) and `layout/page_NN.balloons.jpg`
+   (numbered) and a draft `layout/page_NN.layout.json`: `"panels"` (exact
+   from the sidecar of a page assembled from panels, detected otherwise) and
+   one text layer per balloon (CCWildWords Regular, black, centred,
+   auto-sized to ONE uniform size per page) filled with the `dialogue_exact`
+   lines in script order.
+2. **Read both overlays** and fix the draft JSON. Panels: a wrong box
+   (diagonal gutter, bleed panel, two panels merged) → edit its `box` /
+   `border` (px) or add/remove entries; every panel becomes one layer group.
+   Balloons — the pairing is only "reading order vs script order":
    - move each text to the balloon of its speaker (swap the `text` values;
      never retype a line — copy it from the job so accents stay exact);
    - delete layers that sit on false positives (white clothes, clouds,
@@ -171,17 +189,34 @@ then show what you have, problems included.
      shouts, `"CCWildWords Italic"` for thoughts/narration, `"size"` to
      override the uniform size.
    `make_layout.py` keeps an edited layout on re-runs (`--force` redrafts).
-3. `venv/bin/python generate-comic-page/scripts/build_xcf.py
-   <layout.json>` (~15 s, headless GIMP) writes `out/xcf/<issue>/page_NN.xcf`
-   + `layout/page_NN_preview.jpg`, reloads the XCF and fails unless every
-   text is still a native text layer with the exact string. Notes to act
-   on: font not installed, "may OVERFLOW".
+   Only the balloons under the text boxes you keep are cut out as layers —
+   a deleted false positive stays in the background, a hand-added balloon
+   is cut too.
+3. `venv/bin/python generate-comic-page/scripts/build_psd.py
+   <layout.json>` splits the art into layers (`separate_layers.py`, ~15 s per
+   panel: LaMa inpaint on the CPU + BiRefNet in ComfyUI, started on demand
+   with `COMFYUI_SERVICE=comfyui`; skipped when `work/<issue>/layers/page_NN/`
+   is newer than the art, so text-only rebuilds take seconds), writes
+   `out/psd/<issue>/page_NN.psd` + `layout/page_NN_preview.jpg`, reads the
+   PSD back and fails unless every layer is there and every text box holds
+   the exact string. Notes to act on: font not installed, "may OVERFLOW".
+   `INPAINT=qwen` sends the holes to the local Qwen model instead of LaMa
+   (better backgrounds under a big character, ~100 s per panel);
+   `--no-characters` (or `"characters": false` in the layout) skips the
+   matte when ComfyUI is not available.
 4. Read the preview: every line inside its balloon, nothing clipped,
    right speaker, even size. Fix the JSON and rebuild until it is.
+5. Read `work/<issue>/layers/page_NN/contact.jpg` (one row per panel:
+   background | characters | balloons | border, cut-outs over magenta). A
+   panel whose character cut is wrong — no character in it (BiRefNet then
+   mattes a mountain or a rock), half a body, speed lines — gets
+   `"characters": false` in that panel of the layout JSON and a rebuild with
+   `--force-layers`. The background under a character is a LaMa guess:
+   smeared where the hole is big, which is normal (it is covered).
 
 ### 4. Show Diego, then stop
 
-Send him the lettered preview and the `.xcf` path (SendUserFile when the
+Send him the lettered preview and the `.psd` path (SendUserFile when the
 harness has it, else the paths)
 with a short honest QC report: what you verified, and every doubt or flaw
 you noticed — he decides, don't hide problems to get an approval. State the
@@ -190,9 +225,9 @@ tries/credits used so far. Then end the turn and wait.
 ### 5. His answer
 
 - **OK** → `page_state.py -p <project> approve <issue> <page>` (copies the
-  lettered preview to `approved/page_NN.jpg` and records the `.xcf`; it
-  refuses if the XCF is missing or older than the latest art). If he later
-  restyles the XCF in GIMP he re-exports over that JPG. Then
+  lettered preview to `approved/page_NN.jpg` and records the `.psd`; it
+  refuses if the PSD is missing or older than the latest art). If he later
+  restyles the PSD in Photoshop he re-exports over that JPG. Then
   **ask** whether to generate the next page, naming it ("Página 12 —
   <title> — gero agora?"). Generate it only after a yes. When the issue is
   complete, offer `assemble_cbz.py`.
@@ -208,10 +243,10 @@ tries/credits used so far. Then end the turn and wait.
   - Character design complaints → make the fix durable: correct that
     character's `description` in `charmap.json` first, then reroll.
   - Text-only requests (wording, size, font, position) → edit the layout
-    JSON and rebuild the XCF: free, no generation.
+    JSON and rebuild the PSD: free, no generation, the layer split is reused.
   After new art: re-run the self-QC on the WHOLE page (edits break other
-  things), then `make_layout.py --force` + `build_xcf.py` again, show the
-  result, stop again.
+  things), then `make_layout.py --force` + `build_psd.py` again (the layers
+  are redone from the new art), show the result, stop again.
 - **More examples** (folder or images) → `import_refs.py`, look at them,
   update `charmap.json` (new sheets + sharper description), regenerate the
   page with them attached, show, stop.
@@ -278,8 +313,9 @@ usually talks about whole pages).
    `gen/page_NN_tryK.png` (+ `.panels.json` sidecar). Adjust a panel's `box`
    or `focus` (0..1, which part survives the crop) when a balloon or face is
    cut, and re-assemble (free). `--preview-only` for a quick look.
-5. `make_layout.py` pairs balloons with lines PER PANEL from the sidecar;
-   then `build_xcf.py` as usual.
+5. `make_layout.py` pairs balloons with lines PER PANEL from the sidecar,
+   which also gives the exact panel boxes for the layer groups; then
+   `build_psd.py` as usual.
 
 ### Local Anima backend (`--backend anima`, free)
 
@@ -325,9 +361,11 @@ oval (the auto-fit can overflow narrow boxes); text printed on a model sheet
 ## Cover and editorial
 
 Both are pages of the issue (`kind` in the job: `cover` / `editorial`, from
-`project.json` `"page_kinds"` or the page title). Same loop, same `.xcf`
-deliverable, but their type is DESIGNED over the art instead of dropped
-into balloons, so they are reviewed in **two stages**:
+`project.json` `"page_kinds"` or the page title). Same loop, same `.psd`
+deliverable (the full-bleed art is one layer group `Panel 01` with
+`Background` + `Characters`, no border, no balloons cut), but their type is
+DESIGNED over the art instead of dropped into balloons, so they are
+reviewed in **two stages**:
 
 **Stage "art"** — `gen_page.py` generates the cover as full-bleed textless
 art with calm areas reserved for logo, title burst and small print, and the
@@ -344,19 +382,21 @@ paper `"background"` in the layout (0 credits).
    detection here). Cover: logo, issue/number line, price, title burst,
    credits. Editorial: header, body (merge the body lines into ONE layer,
    keeping paragraph breaks as `\n`), captions, footer.
-2. Position and style every layer (format: `build_xcf.py --help`): `box`
+2. Position and style every layer (format: `build_psd.py --help`): `box`
    in pixels (or set `"units": "fraction"` and use 0..1), `size: null` to
    auto-fit, `color`, `align`, `valign` (`"top"` for body copy), `outline`
-   for type over art, optional `image` layers (a real logo file, fan art).
-   Fonts: exact names from `build_xcf.py --list-fonts [filter]` (e.g.
-   `Impact Regular`, `CCShoutOut Heavy`, `FreeMono Bold`); display type is
-   the one place where CCWildWords is not the default — follow the
-   project's `PROJECT.md` when it names fonts.
-3. `build_xcf.py <layout.json>`, read the preview: legible, nothing over
+   for type over art (a live Layer Style stroke in the PSD), optional
+   `image` layers (a real logo file, fan art).
+   Fonts: names as GIMP shows them, from `build_psd.py --list-fonts
+   [filter]` (`Impact Regular`, `CCShoutOut Heavy`, `FreeMono Bold`; it
+   prints the PostScript name the PSD will carry); display type is the one
+   place where CCWildWords is not the default — follow the project's
+   `PROJECT.md` when it names fonts.
+3. `build_psd.py <layout.json>`, read the preview: legible, nothing over
    faces, nothing clipped, hierarchy right. Rebuild until it is, then show
-   Diego the preview + `.xcf` path. Text layers are never rotated (a
-   rotated text layer stops being cleanly editable) — tell him if a tilted
-   burst would look better so he can rotate it in GIMP.
+   Diego the preview + `.psd` path. Text boxes are never rotated (a
+   rotated text box stops being cleanly editable) — tell him if a tilted
+   burst would look better so he can rotate it in Photoshop.
 4. His OK → `page_state.py ... approve <issue> <page>`, then ask about the
    next page.
 
@@ -391,9 +431,10 @@ paper `"background"` in the layout (0 credits).
 ## Legacy: AI-rendered text
 
 Projects finished before this workflow have `"lettering": "ai"` in their
-`project.json` (the model rendered the dialogue into the image; no XCF for
+`project.json` (the model rendered the dialogue into the image; no PSD for
 story pages). Leave them as they are. New projects never use it — the
-template says `"lettering": "xcf"`. `make_lettering_guide.py -p <project>
+template says `"lettering": "psd"` (`"xcf"` in a project from the GIMP days
+means the same: textless art + editable text). `make_lettering_guide.py -p <project>
 <issue>` still writes `out/lettering_<issue>.md` (every line per page, with
 its context) for anyone lettering by hand.
 
@@ -410,8 +451,10 @@ its context) for anyone lettering by hand.
 | `gen_panel.py -p P <issue> <page> <panel> [...]` | panel mode: ONE panel generation — sheets + scenarios as images, source pages and earlier panels as describe-pages text; `--backend anima [--seed N] [--balloon x,y,w,h ...]` = free local Anima, text only, balloons drawn by code |
 | `anima_panel.py` | (module) the Anima backend of `gen_panel.py`: ComfyUI client, prompt, balloon drawing |
 | `assemble_page.py -p P <issue> <page> [--preview-only]` | panel mode: compose the chosen panel tries into the page art (free) |
-| `make_layout.py -p P <issue> <page> [--force]` | detect the empty balloons (numbered overlay) and draft the layout JSON with the exact script lines |
-| `build_xcf.py <layout.json>` / `--list-fonts` | layout → `.xcf` with native GIMP text layers + preview JPG (every page) |
+| `make_layout.py -p P <issue> <page> [--force]` | detect the panels and the empty balloons (two overlays) and draft the layout JSON with the exact script lines |
+| `build_psd.py <layout.json> [--no-characters] [--force-layers]` / `--list-fonts` | layout → layered `.psd` (one group per panel: Background / Characters / Balloons / Border, plus Paper, hidden flat art, Text group of native Photoshop text boxes) + preview JPG; runs `separate_layers.py` when the layers are missing or older than the art; `build_psd.mjs` (ag-psd) writes and re-reads the file |
+| `separate_layers.py <layout.json> [--no-characters] [--force]` | the layer split alone: LaMa inpaint (manga-translator-ptbr) + BiRefNet matte in ComfyUI → `work/<issue>/layers/page_NN/` + `contact.jpg` |
+| `balloons.py`, `panels.py`, `psd_text_fit.py`, `page_preview.py`, `comfyui.py` | (modules) balloon detection + masks, panel boxes + borders, fonts/sizes of the text boxes (fontconfig + Pillow, Photoshop's wrap and leading rules), flattened preview, ComfyUI client shared with the Anima backend |
 | `status.py [-p P]` | approved / pending / awaiting_review per issue |
 | `make_lettering_guide.py -p P <issue>` | per-page list of every line, for hand lettering |
 | `assemble_cbz.py -p P <issue>` | approved pages → `out/*.cbz` |

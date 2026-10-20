@@ -4,7 +4,7 @@
 Each panel's chosen attempt (plan "chosen", else its latest try) is scaled to
 cover its box, cropped around its "focus", and pasted on a white page with a
 black border; the result is saved as the page's next attempt,
-work/<issue>/gen/page_NN_tryK.png, so make_layout.py / build_xcf.py /
+work/<issue>/gen/page_NN_tryK.png, so make_layout.py / build_psd.py /
 page_state.py work on it exactly as on a page drawn in one generation.
 A sidecar page_NN_tryK.panels.json records which panel files went in and
 where (make_layout.py uses it to pair each panel's balloons with that
