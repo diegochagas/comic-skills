@@ -175,16 +175,28 @@ context font (the log line says so; the letterer changes the font in GIMP).
   layer to a PNG (and prints its position/size) so you can view the source
   art with the Read tool. Needed because a raw `.psd` isn't directly
   viewable as an image.
+- `replace_layer_pixels.mjs <psd> <layer index> <png> [--output]` — puts a
+  PNG of the same size back into one raster layer (e.g. the Cleaned layer
+  after `inpaint_lama.py` erased a sign that is lettering in the art); every
+  other layer, text layers included, is written back unchanged.
 - `set_text_layers.mjs <psd> <edits.json> [--output <path>]` — writes new
   text into one or more text layers. `edits.json` is `{ "<layer index or
-  name>": "new text", ... }`. Defaults to overwriting the PSD in place;
-  everything except the text layers' content is preserved byte-exact.
+  name>": "new text", ... }`; a value may be `{"text": "...", "size": 14}`
+  to set the font size (px) too - use it for long blocks (art-book captions,
+  info pages) that would otherwise grow far past their box at 32 px.
+  Defaults to overwriting the PSD in place; everything except the text
+  layers' content is preserved byte-exact.
 - `scan_placeholders.mjs <folder>` — lists every text layer still holding
   "Lorem ipsum" across a folder of PSDs; run it at the end of a Mode A pass.
 - `add_and_fill_text_layers.mjs <psd> <page.json> [--output]` — adds boxes
   AND sets their final text in one write (`{"blocks": [[x,y,w,h]...],
   "texts": [...]}`) - for flaky network/shared-folder mounts where two
   back-to-back read-modify-writes raced and left duplicate layers.
+  `--append` keeps the PSD's existing `Text N` layers and numbers the new
+  boxes after them (boxes the page was missing); `page.json` may then add
+  `"styles": [{"color": "#ffffff", "size": 14, "rotate": 90, "align":
+  "left"}, ...]` (one optional entry per block) for white-on-black bars,
+  captions and sideways text.
 - `annotate_text_boxes.py <image> <layers.json> <out.png>` — draws numbered
   boxes from a `list_layers.mjs` dump over the page, 2x, to match layer
   indices to balloons by eye.
