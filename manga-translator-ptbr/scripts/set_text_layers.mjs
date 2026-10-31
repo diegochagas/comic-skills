@@ -8,6 +8,8 @@
 // Usage: node set_text_layers.mjs <psd> <edits.json> [--output <path>] [--no-fit]
 // edits.json: { "<layer index>": "new text", ... }  (index from
 // list_text_layers.mjs) -- or use the layer name instead of the index.
+// A value may also be { "text": "new text", "size": 18 } to set the font size
+// (px) too, for long blocks that must fit a small box.
 // --output defaults to overwriting <psd> in place.
 // After the edit every text box is grown to show its whole text at the box's
 // font size and boxes whose text would collide are moved apart
@@ -32,6 +34,12 @@ if (!psdPath || !editsPath) {
 // Portuguese, 0 = English: USA, which is what a layer gets when it is unset).
 const LANGUAGE_PT_BR = 11;
 
+/** Sets the font size (px) of a whole text layer: its base style and every style run. */
+function setFontSize(textInfo, size) {
+  textInfo.style = { ...(textInfo.style || {}), fontSize: size };
+  for (const run of textInfo.styleRuns || []) run.style = { ...(run.style || {}), fontSize: size };
+}
+
 const edits = JSON.parse(fs.readFileSync(editsPath, 'utf8'));
 const psd = readPsd(fs.readFileSync(psdPath), { useRawData: true });
 
@@ -45,7 +53,9 @@ for (const [key, newText] of Object.entries(edits)) {
     console.log(`SKIP "${key}": no such text layer`);
     continue;
   }
-  layer.text.text = newText;
+  const { text, size } = typeof newText === 'string' ? { text: newText, size: null } : newText;
+  layer.text.text = text;
+  if (size) setFontSize(layer.text, size);
   // the new text is the Brazilian Portuguese translation: mark it as such
   layer.text.style = { ...(layer.text.style || {}), language: LANGUAGE_PT_BR };
   for (const run of layer.text.styleRuns || []) run.style = { ...(run.style || {}), language: LANGUAGE_PT_BR };

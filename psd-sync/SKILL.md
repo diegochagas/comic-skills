@@ -13,7 +13,10 @@ venv). `<repo>` is the comic-skills checkout.
 <repo>/venv/bin/python psd-sync/scripts/sync_psds.py "<folder1>" "<folder2>" [--apply]
 ```
 
-- `folder1` — the new PSDs. Files **move out of here** when they are applied.
+- `folder1` — the new PSDs: a folder, **or a `.rar`/`.zip`/`.7z` of PSDs**
+  (e.g. `Golden Age Cap11 PSDs.rar`). An archive is extracted to a temp dir
+  under `~/Downloads` (`unrar` for .rar, `7z` otherwise; wrapper folders are unwrapped); files **move out of
+  there** when they are applied.
 - `folder2` — the folder being updated. Its copy of an applied page goes to
   the trash and the folder-1 file takes its place, same name.
 
@@ -50,6 +53,15 @@ physically left in folder1 — kept pages (`cut`/`different`/`no_counterpart`/
 folder1 is empty after that, it gets trashed too: its parent as well, when
 folder1 was that parent's only entry (the common `Name/Name/` download-
 extraction wrapper) — but never a parent that has other content in it.
+
+### When folder1 is an archive
+
+Same dry run → approval → `--apply` flow. The temp extraction is always
+removed at the end. After a full `--apply`, leftovers are **trashed, not moved
+to `~/Downloads`**: every unapplied `.psd` (kept pages included, listed in the
+output before it goes) and the archive file itself. With `--only` nothing is
+trashed except the replaced folder2 copies. Everything is recoverable from the
+desktop trash.
 
 ## What gets compared
 
