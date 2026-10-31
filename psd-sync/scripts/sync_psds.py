@@ -19,6 +19,7 @@ import os
 import shutil
 import subprocess
 import sys
+import tempfile
 import time
 from pathlib import Path
 
@@ -272,6 +273,53 @@ def move_leftovers(src_dir, out_dir):
     return moved
 
 
+ARCHIVE_SUFFIXES = {".rar", ".zip", ".7z"}
+
+
+def extract_archive(archive, out_root):
+    """Extract `archive` into a fresh temp dir under out_root and return
+    (temp_dir, psd_dir), descending through single-folder wrappers."""
+    # 7z fails on some RAR5 methods; unrar handles every .rar
+    if archive.suffix.lower() == ".rar":
+        tool, args_for = "unrar", lambda t: ["unrar", "x", "-y", "-idq", str(archive), f"{t}/"]
+    else:
+        tool, args_for = "7z", lambda t: ["7z", "x", "-y", f"-o{t}", str(archive)]
+    if shutil.which(tool) is None:
+        raise RuntimeError(f"{tool} is needed to read {archive.suffix} archives")
+    out_root.mkdir(parents=True, exist_ok=True)
+    temp = Path(tempfile.mkdtemp(prefix="psd-sync-", dir=out_root))
+    done = subprocess.run(args_for(temp), capture_output=True, text=True)
+    if done.returncode != 0:
+        shutil.rmtree(temp, ignore_errors=True)
+        raise RuntimeError(f"could not extract {archive}: {done.stderr.strip() or done.stdout[-300:]}")
+    psd_dir = temp
+    while not any(p.suffix.lower() == ".psd" for p in psd_dir.iterdir()):
+        subdirs = [p for p in psd_dir.iterdir() if p.is_dir()]
+        if len(subdirs) != 1:
+            break
+        psd_dir = subdirs[0]
+    return temp, psd_dir
+
+
+def finish_archive(temp, archive, consumed):
+    """Drop the temp extraction; on a full apply also trash the archive itself."""
+    if temp is not None:
+        shutil.rmtree(temp, ignore_errors=True)
+    if consumed:
+        used = trash(archive)
+        print(f"{archive} trashed ({used}) - archive fully processed")
+
+
+def trash_leftovers(src_dir):
+    """Trash every .psd still in src_dir (archive mode: leftovers are not kept)."""
+    trashed = []
+    for p in sorted(src_dir.iterdir()):
+        if p.is_file() and p.suffix.lower() == ".psd":
+            trash(p)
+            trashed.append(p.name)
+    return trashed
+
+
 def trash_source_if_empty(src_dir):
     """If src_dir has nothing left in it, trash it - or its parent, when src_dir
     is that parent's only entry (the common "Name/Name/" download wrapper)."""
@@ -290,7 +338,7 @@ MOVE = {"identical", "same_framing"}
 def main():
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("folder1", help="new PSDs (source; files move out of here)")
+    ap.add_argument("folder1", help="new PSDs (source; files move out of here) - a folder, or a .rar/.zip/.7z of PSDs")
     ap.add_argument("folder2", help="PSDs to be replaced (destination)")
     ap.add_argument("--apply", action="store_true",
                     help="actually trash folder2's copy and move folder1's file in")
@@ -303,10 +351,17 @@ def main():
     args = ap.parse_args()
 
     src_dir, dst_dir = Path(args.folder1).expanduser(), Path(args.folder2).expanduser()
-    for d in (src_dir, dst_dir):
-        if not d.is_dir():
-            sys.exit(f"not a folder: {d}")
+    out_root = Path(os.environ.get("COMIC_OUTPUT_DIR") or Path.home() / "Downloads")
+    archive, temp = None, None
+    if src_dir.is_file() and src_dir.suffix.lower() in ARCHIVE_SUFFIXES:
+        archive = src_dir.resolve()
+        temp, src_dir = extract_archive(archive, out_root)
+        print(f"extracted {archive.name} -> {src_dir}\n")
+    if not dst_dir.is_dir() or not src_dir.is_dir():
+        finish_archive(temp, archive, False)
+        sys.exit(f"not a folder: {dst_dir if not dst_dir.is_dir() else src_dir}")
     if src_dir.resolve() == dst_dir.resolve():
+        finish_archive(temp, archive, False)
         sys.exit("folder1 and folder2 are the same folder")
 
     wanted = None
@@ -317,6 +372,7 @@ def main():
                    if p.is_file() and p.suffix.lower() == ".psd"
                    and (wanted is None or p.name in wanted))
     if not names:
+        finish_archive(temp, archive, False)
         sys.exit(f"no .psd files in {src_dir}")
 
     rows = []
@@ -339,7 +395,6 @@ def main():
     to_move = [r for r in rows if r["action"] == "replace"]
     print(f"\n{len(rows)} file(s): {len(to_move)} to replace, {len(rows) - len(to_move)} kept as they are")
 
-    out_root = Path(os.environ.get("COMIC_OUTPUT_DIR") or Path.home() / "Downloads")
     leftovers_moved = []
     source_trashed = None
 
@@ -356,7 +411,12 @@ def main():
                 row["action"] = "keep"
                 print(f"{row['file']:<24} FAILED: {exc}")
 
-        if not args.only:
+        if archive is not None:
+            if not args.only:
+                for name in trash_leftovers(src_dir):
+                    print(f"{name:<24} leftover -> trashed")
+                source_trashed = str(archive)
+        elif not args.only:
             leftovers_moved = move_leftovers(src_dir, out_root)
             if leftovers_moved:
                 print()
@@ -378,7 +438,7 @@ def main():
         print(f"dry run - nothing was moved; re-run with --apply to replace those files{note}")
 
     if args.json is not None:
-        out = Path(args.json).expanduser() if args.json else out_root / f"{src_dir.name}-psd-sync.json"
+        out = Path(args.json).expanduser() if args.json else out_root / f"{(archive.stem if archive else src_dir.name)}-psd-sync.json"
         out.parent.mkdir(parents=True, exist_ok=True)
         out.write_text(json.dumps({
             "folder1": str(src_dir), "folder2": str(dst_dir),
@@ -389,6 +449,9 @@ def main():
             "files": rows,
         }, indent=2, ensure_ascii=False))
         print(f"report: {out}")
+
+    if archive is not None:
+        finish_archive(temp, archive, bool(args.apply and not args.only))
 
 
 if __name__ == "__main__":
