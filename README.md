@@ -50,6 +50,7 @@ the repo root.
 | [`clean-texts`](clean-texts/) | `clean_texts.py` | Erases the text of an image or of every image in a folder through Higgsfield (`gpt_image_2_5`) - or, with `--backend local`, free and offline through the text detector + a local Qwen-Image-Edit in ComfyUI - and changes nothing else: the source is mirror-padded to an aspect ratio the model accepts and the output brought back to its exact geometry, then only the regions where text was erased are taken from the model — every other pixel is the original's. `--language` erases only the text in one language; `--keep` protects what is named; `--reuse-raw` with `--drop-region` / `--restore-threshold` fixes a result for free. The agent QCs every result. PNGs with the original names. |
 | [`comic-downloader`](comic-downloader/) ([README](comic-downloader/README.md)) | `download.cjs`, `sites/<name>/download.config.json` | Downloads comic/magazine page images whose URLs follow a pattern (numbered pages, issues with dates, galleries, URL lists) from JSON site profiles; dry-run first, skips existing files. Bundled profile: Dorothee Magazine. |
 | [`comic-archive`](comic-archive/) | `images_to_cbr.py`, `cbr_to_images.py` | Pack image folders into `.cbr`/`.cbz` (optional JPEG conversion, max height, quality) and unpack `.cbr`/`.cbz`/`.zip` archives (RAR via unrar/7z; `--first-only` for covers). The SKILL.md maps what the user asks for to the flags. |
+| [`psd-to-cbr`](psd-to-cbr/) | `psd_to_cbr.py` | PSD/PSB pages (or one folder of PSDs per chapter) → `.cbr` in `~/Downloads` in one step: flattens with `pdf-psd-convert`, packs with `comic-archive`; optional max height/quality. |
 | [`pdf-psd-convert`](pdf-psd-convert/) | `pdf_to_images.py`, `psd_to_jpg.py` | PDF pages → JPG at any DPI (one folder per PDF or one shared folder); `.psd`/`.psb` → JPG recursively, keeping folder structure, with matte color and an optional all-layers-visible render. |
 | [`psd-sync`](psd-sync/) | `sync_psds.py` | Compares the same-named PSDs of two folders by their art layer (bottom-most pixel layer covering the canvas, `Original` in Diego's files) and replaces folder 2's copy with folder 1's — old copy to the trash, new file moved in — only where the artwork was **not** cropped. Pages whose art was cut on any side (with or without a resize afterwards, found down to half a side and reported in pixels) stay where they are in both folders. Dry run by default; `--apply` is the only thing that moves anything. |
 | [`psd-xcf-convert`](psd-xcf-convert/) | `convert.py`, `psd_text_info.mjs`, `gimp_convert_job.py`, `write_psd_text.mjs` | Photoshop PSD ⇄ GIMP XCF for a file or a folder (a folder with both kinds converts each file to the other format) with the text still **editable**: Type layers ⇄ native GIMP text layers — same font (PostScript name ⇄ `Family Style` through fontconfig, missing fonts substituted and reported), size, colour, justification, leading, tracking, paragraph box or point text, rotation, mixed bold/italic/colour runs — and the text outline both ways: GIMP's Filters > Text Styling (`gegl:styles`) outline/shadow ⇄ Photoshop's live Layer Styles Stroke/Drop Shadow, on text and on any other layer. Pixels, groups, masks, blend modes and opacity travel through GIMP's own PSD import/export (headless GIMP, one start per 15 files); ag-psd reads and writes the Type layers and Layer Styles. A PSD → XCF → PSD trip comes back with its own fonts, boxes and angles. |
@@ -115,7 +116,7 @@ this repo. To use them from anywhere, symlink the skill folders into the
 global directories, the same way:
 
 ```sh
-for s in generate-comic-page manga-translator-ptbr split-scans clean-texts comic-downloader comic-archive pdf-psd-convert psd-sync psd-xcf-convert docx-odt-convert describe-pages find-pages image-utils; do
+for s in generate-comic-page manga-translator-ptbr split-scans clean-texts comic-downloader comic-archive psd-to-cbr pdf-psd-convert psd-sync psd-xcf-convert docx-odt-convert describe-pages find-pages image-utils; do
   for h in ~/.claude/skills ~/.agents/skills ~/.codex/skills; do
     mkdir -p "$h" && ln -sfn ~/Projects/comic-skills/$s "$h/$s"
   done
@@ -212,6 +213,7 @@ place.
 | `clean-texts` | `~/Downloads/<name>.png` (one image), `~/Downloads/<folder> clean/<name>.png` (+ `clean-texts-work/`) |
 | `comic-downloader` | `~/Downloads/<profile outputDir>/` |
 | `comic-archive` | `~/Downloads/<folder>.cbr`, `~/Downloads/<folder>/<chapter>.cbr`; unpacked: `~/Downloads/<folder>/<archive>/` |
+| `psd-to-cbr` | `~/Downloads/<folder>.cbr`, `~/Downloads/<folder>/<chapter>.cbr` |
 | `pdf-psd-convert` | `~/Downloads/<folder>/<PdfName>/`; `~/Downloads/<folder> JPG/` |
 | `psd-sync` | nothing by default (it moves files between the two folders it is given); `--json` writes `~/Downloads/<folder1 name>-psd-sync.json` |
 | `psd-xcf-convert` | `~/Downloads/<folder or file name> converted/` (`.xcf` for every PSD, `.psd` for every XCF, `_preview/` with `--preview`) |
