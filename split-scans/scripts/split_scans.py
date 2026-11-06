@@ -6,7 +6,7 @@ layered PSDs (every raster layer is warped the same way; text layers travel
 to the page their centre lands on, keeping their fonts and boxes).
 
 Usage:
-  split_scans.py <file-or-folder> [--output DIR] [--rtl] [--spread auto|yes|no]
+  split_scans.py <file-or-folder> [--output DIR] [--rtl] [--spread auto|yes|no] [--spreads STEM ...]
                  [--pages auto|1|2] [--align perspective|rotate|none]
                  [--gutter inpaint|white|flatten|none] [--only STEM ...]
                  [--recursive] [--dry-run] [--review-only] [--force]
@@ -281,9 +281,14 @@ def join_spread(left, right):
     return np.concatenate([pad(left), pad(right)], axis=1)
 
 
-def decide_spread(plan, warped_gray, opts):
-    """Fill plan['spread'] from the two warped grey pages (after flattening)."""
+def decide_spread(plan, warped_gray, opts, stem=""):
+    """Fill plan['spread'] from the two warped grey pages (after flattening).
+    A stem named in --spreads is always a spread (the agent's call: the
+    automatic test below only catches drawings that bleed into the spine)."""
     if len(plan["pages"]) != 2:
+        return
+    if stem in (opts.spreads or []):
+        plan["spread"] = True; plan["spread_reason"] = "--spreads"
         return
     if opts.spread in ("yes", "no"):
         plan["spread"] = opts.spread == "yes"; plan["spread_reason"] = f"--spread {opts.spread}"
@@ -535,6 +540,7 @@ def main():
     ap.add_argument("--output", "-o")
     ap.add_argument("--rtl", action="store_true", help="first number of NNN-MMM is the RIGHT page (manga reading order)")
     ap.add_argument("--spread", choices=["auto", "yes", "no"], default="auto")
+    ap.add_argument("--spreads", nargs="*", metavar="STEM", help="stems (e.g. 016-017) whose picture runs across both pages: kept as ONE file")
     ap.add_argument("--pages", choices=["auto", "1", "2"], default="auto")
     ap.add_argument("--align", choices=["perspective", "none"], default="perspective")
     ap.add_argument("--gutter", choices=["inpaint", "white", "flatten", "none"], default="inpaint")
@@ -591,7 +597,7 @@ def main():
                         wp = warp_page(ana, p, (255, 255, 255))
                         wp, _, _ = fix_gutter(wp, p, paper, "flatten")
                         wg.append(G.luminance(wp))
-                    decide_spread(plan, wg, opts)
+                    decide_spread(plan, wg, opts, stem)
                 onames = output_names(plan, names, opts)
                 out_paths = [os.path.join(out, n + ".psd") for n in onames]
                 g = plan["gutter"]
