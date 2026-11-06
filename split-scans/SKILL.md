@@ -9,7 +9,7 @@ One script does the whole job, for a file or a folder, images (jpg, png,
 tif, webp) or layered PSDs:
 
 ```bash
-<repo>/venv/bin/python split-scans/scripts/split_scans.py <file-or-folder> [--output DIR] [--rtl] [--spread auto|yes|no] [--pages auto|1|2] [--gutter inpaint|white|flatten|none] [--align perspective|none] [--rotate 0|90|-90|180] [--only STEM ...] [--recursive] [--also-images] [--dry-run] [--force]
+<repo>/venv/bin/python split-scans/scripts/split_scans.py <file-or-folder> [--output DIR] [--rtl] [--spread auto|yes|no] [--spreads STEM ...] [--pages auto|1|2] [--gutter inpaint|white|flatten|none] [--align perspective|none] [--rotate 0|90|-90|180] [--only STEM ...] [--recursive] [--also-images] [--dry-run] [--force]
 ```
 
 `<repo>` is the comic-skills checkout; the script needs the shared `venv`
@@ -113,6 +113,10 @@ edges {...} | right ...`.
      the raw crop when an edge fit went wrong on a damaged page;
    - a single drawing over both pages that the test called two pages (or the
      opposite): `--spread yes` / `--spread no` with `--only` those stems;
+     for a list of them in one run use `--spreads 016-017 018-019` (those stems
+     are kept as one file, everything else follows `--spread`); decide them by
+     looking at the scans (contact sheets + middle crops) - there is no
+     reliable automatic test for a picture that keeps its inner margins;
    - a book whose shadow is light and whose middle comes out fine already:
      `--gutter flatten` (no inpainting).
 3. **Real run** with the decided flags (`--spread no` for a whole book that

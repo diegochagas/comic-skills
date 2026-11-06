@@ -55,6 +55,56 @@ for scans numbered in reading order.
   directly; their text boxes move with the page they sit on. Then run
   `fit_text_boxes.mjs` (below) on the results.
 
+### Spreads stay in one file
+
+A drawing that runs across the spine (a double-page spread, or a top panel
+that crosses it) must NOT be divided. The automatic test only catches
+drawings that bleed into the spine on both pages, so decide it yourself
+before the first round:
+
+1. Dry-run the split (`split_scans.py <SRC> --dry-run --output <tmp>`), then
+   look at the scans themselves in contact sheets (6-12 per sheet) and, for the
+   doubtful ones, crops of the middle 40 % at higher resolution. A spread has
+   art, a panel border or a speech balloon continuing from one page into the
+   other; two facing pages only share the spine. If the author's script or
+   translation file marks them (`PAGINA-DUPLA`, "double page"), trust that.
+2. Pass the stems to the split: `SPLIT_ARGS="--rtl --spreads 016-017 018-019"`
+   (`--spreads STEM ...` keeps those scans as ONE file named `016-017`; the
+   file name of a spread is the two page numbers). Everything else is
+   unchanged. Check `<OUT>/split/review/` for the spreads.
+3. Chinese/Japanese scans of manga read right-to-left: the first number is
+   the RIGHT page - use `--rtl` (check a folio number on one scan).
+
+Spreads that were already divided (pages translated and lettered as two
+PSDs) are rebuilt, text included, from the scans without redoing the
+translation:
+
+```bash
+<repo>/venv/bin/python split-scans/scripts/split_scans.py <scans named NNN-MMM> --output <split dir> --only STEM ... --spreads STEM ... --rtl --also-images
+<repo>/venv/bin/python manga-translator-ptbr/scripts/spread_from_pages.py <split dir> <folder of the translated page PSDs> <out dir> [--only STEM ...]
+```
+
+When the old pages are exact crops of the raw scan (check: registration reports
+scale 1.000, angle 0), skip the re-cut - the raw scan is the better base:
+
+```bash
+<repo>/venv/bin/python manga-translator-ptbr/scripts/spread_from_pages.py x <translated page PSDs> <out dir> --raw-scans <scans named NNN-MMM.jpg> --only STEM ...
+```
+
+Original = the untouched scan, Copy = the scan with the erased pixels of the old
+`Copy` layers pasted at their exact offsets (their cleaning is kept; the automatic
+eraser, `--use-cleaned` after `clean_blocks.py` on `final/<stem>_detect.json`,
+left Chinese strokes under many boxes), text layers shifted by those offsets.
+
+`spread_from_pages.py` matches every old page against the spread (SIFT +
+RANSAC), resizes the spread so the old text boxes keep their size, carries the
+text-erased pixels of the old `Copy` layers over to the new `Copy` and moves
+each Type layer to where its art now is (named `Text 1..n`, first-number page
+first). It logs the inliers/scale/angle of each page: a failed match prints
+`FAIL STEM` and writes nothing. Add adjustment layers afterwards with
+`copy_layer_to_psds.mjs` and check each result as a preview before it replaces
+the two page files.
+
 ## Text boxes always show their whole text
 
 Every text box this skill writes or fills is sized for its text: after
@@ -200,6 +250,11 @@ context font (the log line says so; the letterer changes the font in GIMP).
 - `annotate_text_boxes.py <image> <layers.json> <out.png>` — draws numbered
   boxes from a `list_layers.mjs` dump over the page, 2x, to match layer
   indices to balloons by eye.
+- `copy_layer_to_psds.mjs <source.psd> <layer name> <folder> [--from STEM] [--output DIR | --in-place]`
+  — copies one layer (e.g. an adjustment layer "Levels 1") to the top of every
+  PSD in a folder, rerun-safe; rasters and text stay byte-exact.
+- `spread_from_pages.py <split dir> <pages dir> <out dir>` — rebuilds divided
+  spreads as one PSD (see "Spreads stay in one file").
 - `fit_text_boxes.mjs <psd|folder> [--from STEM] [--only ...] [--output DIR | --in-place] [--dry-run]`
   — grows every text box to show its whole text and moves boxes whose text
   covers another apart (see "Text boxes always show their whole text").
