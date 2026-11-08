@@ -14,6 +14,7 @@ The "art layer" is the bottom-most pixel layer that covers the canvas (the
 scan under the lettering); --layer picks another one by name.
 """
 import argparse
+from glob import escape as glob_escape
 import json
 import os
 import shutil
@@ -26,6 +27,8 @@ from pathlib import Path
 import cv2
 import numpy as np
 from psd_tools import PSDImage
+
+from previews import DIVERGENT, make_previews
 
 # best normalized cross-correlation accepted as "this is the same artwork"
 MATCH_MIN = 0.90
@@ -247,32 +250,6 @@ def replace(src, dst):
     return used
 
 
-def unique_dest(out_dir, name):
-    """`out_dir / name`, or a `name (1).psd`-style variant if that's taken."""
-    dest = out_dir / name
-    if not dest.exists():
-        return dest
-    stem, suffix = Path(name).stem, Path(name).suffix
-    i = 1
-    while True:
-        dest = out_dir / f"{stem} ({i}){suffix}"
-        if not dest.exists():
-            return dest
-        i += 1
-
-
-def move_leftovers(src_dir, out_dir):
-    """Move every .psd still in src_dir (kept pages, failed applies) to out_dir."""
-    out_dir.mkdir(parents=True, exist_ok=True)
-    moved = []
-    for p in sorted(src_dir.iterdir()):
-        if p.is_file() and p.suffix.lower() == ".psd":
-            dest = unique_dest(out_dir, p.name)
-            shutil.move(str(p), str(dest))
-            moved.append((p.name, dest))
-    return moved
-
-
 ARCHIVE_SUFFIXES = {".rar", ".zip", ".7z"}
 
 
@@ -301,13 +278,25 @@ def extract_archive(archive, out_root):
     return temp, psd_dir
 
 
+def archive_volumes(archive):
+    """The archive plus its sibling volumes: `X.part1.rar` -> X.part1.rar, X.part2.rar..."""
+    stem = archive.name[:-len(archive.suffix)]
+    if not stem.lower().rsplit(".", 1)[-1].startswith("part"):
+        return [archive]
+    base = stem.rsplit(".", 1)[0]
+    siblings = sorted(archive.parent.glob(f"{glob_escape(base)}.part*{archive.suffix}"))
+    return siblings or [archive]
+
+
 def finish_archive(temp, archive, consumed):
-    """Drop the temp extraction; on a full apply also trash the archive itself."""
+    """Drop the temp extraction; on a full apply also trash the archive itself
+    (every volume of a multi-part .rar, or the leftover volumes stay orphaned)."""
     if temp is not None:
         shutil.rmtree(temp, ignore_errors=True)
     if consumed:
-        used = trash(archive)
-        print(f"{archive} trashed ({used}) - archive fully processed")
+        for volume in archive_volumes(archive):
+            used = trash(volume)
+            print(f"{volume} trashed ({used}) - archive fully processed")
 
 
 def trash_leftovers(src_dir):
@@ -335,6 +324,32 @@ def trash_source_if_empty(src_dir):
 MOVE = {"identical", "same_framing"}
 
 
+def forced(row, args):
+    """True when --include-divergent asks to replace this cut/different page."""
+    if args.include_divergent is None or row["status"] not in DIVERGENT:
+        return False
+    names = {n if n.lower().endswith(".psd") else n + ".psd" for n in args.include_divergent}
+    return not names or row["file"] in names
+
+
+def write_previews(src_dir, dst_dir, rows, out_root, archive):
+    """Dry run: side-by-side JPGs of every divergent page so Diego can check by eye."""
+    label = archive.name.split(".part")[0].removesuffix(archive.suffix) if archive else src_dir.name
+    made = make_previews(src_dir, dst_dir, rows, out_root / f"{label} comparison")
+    if made:
+        print(f"\npreview comparison ({len(made)} page(s), folder1 left / folder2 right): {made[0].parent}")
+
+
+def report_empty_source(src_dir):
+    """Trash src_dir (or its wrapper) when nothing is left in it; returns what was trashed."""
+    target, used = trash_source_if_empty(src_dir)
+    if target is None:
+        print(f"\nfolder1 not trashed - still has: {', '.join(p.name for p in sorted(src_dir.iterdir()))}")
+        return None
+    print(f"\n{target} trashed ({used}) - folder1 was fully synced")
+    return str(target)
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -344,6 +359,9 @@ def main():
                     help="actually trash folder2's copy and move folder1's file in")
     ap.add_argument("--only", nargs="+", metavar="NAME",
                     help="limit to these file names (089.psd or 089)")
+    ap.add_argument("--include-divergent", nargs="*", metavar="NAME",
+                    help="with --apply, also replace pages kept as cut/different: the named ones, "
+                         "or all of them when no name is given (only after Diego saw the previews)")
     ap.add_argument("--layer", metavar="NAME",
                     help="compare this layer instead of the auto-detected art layer")
     ap.add_argument("--json", nargs="?", const="", metavar="PATH",
@@ -388,14 +406,15 @@ def main():
                 row.update(compare(gray_a, gray_b), layer1=layer_a, layer2=layer_b)
             except Exception as exc:  # unreadable PSD, missing layer...
                 row.update(status="error", detail=f"{type(exc).__name__}: {exc}")
-        row["action"] = "replace" if row["status"] in MOVE else "keep"
+        row["action"] = "replace" if row["status"] in MOVE or forced(row, args) else "keep"
         rows.append(row)
         print(f"{name:<24} {row['status']:<14} {row['action']:<8} {row.get('detail','')}")
 
     to_move = [r for r in rows if r["action"] == "replace"]
     print(f"\n{len(rows)} file(s): {len(to_move)} to replace, {len(rows) - len(to_move)} kept as they are")
+    if not args.apply:
+        write_previews(src_dir, dst_dir, rows, out_root, archive)
 
-    leftovers_moved = []
     source_trashed = None
 
     if args.apply:
@@ -411,28 +430,16 @@ def main():
                 row["action"] = "keep"
                 print(f"{row['file']:<24} FAILED: {exc}")
 
-        if archive is not None:
-            if not args.only:
-                for name in trash_leftovers(src_dir):
-                    print(f"{name:<24} leftover -> trashed")
+        if not args.only:
+            for name in trash_leftovers(src_dir):
+                print(f"{name:<24} leftover -> trashed")
+            if archive is not None:
                 source_trashed = str(archive)
-        elif not args.only:
-            leftovers_moved = move_leftovers(src_dir, out_root)
-            if leftovers_moved:
-                print()
-                for name, dest in leftovers_moved:
-                    print(f"{name:<24} leftover -> moved to {dest}")
-            target, used = trash_source_if_empty(src_dir)
-            if target is not None:
-                source_trashed = str(target)
-                print(f"\n{target} trashed ({used}) - folder1 was fully synced")
             else:
-                remaining = ", ".join(p.name for p in sorted(src_dir.iterdir()))
-                print(f"\nfolder1 not trashed - still has: {remaining}")
+                source_trashed = report_empty_source(src_dir)
     elif to_move:
-        note = (f"; the {len(rows) - len(to_move)} kept file(s) would move to {out_root} "
-                f"and folder1 (or its wrapper) trashed once empty" if len(rows) > len(to_move)
-                else "; folder1 (or its wrapper) would then be trashed, now empty")
+        note = (f"; the {len(rows) - len(to_move)} kept file(s) would be trashed with the rest of "
+                f"folder1 (or the archive) unless --include-divergent names them")
         if args.only:
             note = ""
         print(f"dry run - nothing was moved; re-run with --apply to replace those files{note}")
@@ -443,7 +450,6 @@ def main():
         out.write_text(json.dumps({
             "folder1": str(src_dir), "folder2": str(dst_dir),
             "applied": bool(args.apply),
-            "leftovers_moved": [{"file": n, "to": str(d)} for n, d in leftovers_moved],
             "source_trashed": source_trashed,
             "generated_at": time.strftime("%Y-%m-%d %H:%M:%S"),
             "files": rows,

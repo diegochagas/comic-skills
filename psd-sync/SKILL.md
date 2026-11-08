@@ -5,7 +5,8 @@ description: Given folder1 (the new PSDs) and folder2 (the older folder being up
 
 # psd-sync — replace PSDs only where the art was not cut
 
-One script, `psd-sync/scripts/sync_psds.py`, run with the repo venv
+Two scripts, `psd-sync/scripts/sync_psds.py` (compare + apply) and
+`previews.py` (side-by-side images, called by the first), run with the repo venv
 (`<repo>/venv/bin/python`; needs psd-tools, OpenCV, numpy — all in the shared
 venv). `<repo>` is the comic-skills checkout.
 
@@ -37,9 +38,20 @@ anything happens.
    the cut sides of every page that would be kept. Cut pages are the whole
    point of the check: they mean the two files frame the art differently and
    somebody has to decide.
-3. **Only then re-run the exact same command with `--apply`.** Never run
+   **Whenever any page is `cut` or `different`, the dry run itself writes a
+   preview comparison** — one JPG per such page, folder 1 on the left and
+   folder 2 on the right, each labelled with its pixel size — to
+   `<root>/<folder1 name> comparison/` (`~/Downloads` by default). Always tell
+   Diego that path and look at the images yourself (open the ones that are
+   unclear) so you can say, per page, which side looks better and why
+   (cropped, lower resolution, washed-out text, flat fill instead of scan...).
+   Never ask him to decide on divergent pages without the previews.
+3. **Only then re-run the same command with `--apply`.** Never run
    `--apply` on the first pass, never in the same turn as the dry run, and
-   never for a subset Diego did not ask for.
+   never for a subset Diego did not ask for. If, after seeing the previews,
+   he says to replace divergent pages too ("all pages", or a list), add
+   `--include-divergent` (all of them) or `--include-divergent 000-02 031`
+   (only those): without it a `cut`/`different` page is never replaced.
 
 Deleting is always `gio trash` / `trash-put`, never `rm`, so a wrong call is
 undone from the desktop trash. The script refuses to run if folder1 and
@@ -47,21 +59,23 @@ folder2 are the same folder, and it verifies the size of every moved file.
 
 After `--apply` (full runs only — this is skipped when `--only` was used,
 since a partial run never looks at the rest of folder1), any `.psd` still
-physically left in folder1 — kept pages (`cut`/`different`/`no_counterpart`/
-`error`) as well as any page whose apply failed — is moved to `~/Downloads`
-(`COMIC_OUTPUT_DIR` overrides the root) instead of being left behind. If
-folder1 is empty after that, it gets trashed too: its parent as well, when
+physically left in folder1 — pages not replaced (`cut`/`different` without
+`--include-divergent`, `no_counterpart`, `error`) as well as any page whose
+apply failed — is **trashed** (listed in the output as it goes; recoverable
+from the desktop trash), never left behind and never moved to `~/Downloads`.
+The preview comparison folder is not touched: Diego deletes it himself.
+Once folder1 is empty it gets trashed too: its parent as well, when
 folder1 was that parent's only entry (the common `Name/Name/` download-
 extraction wrapper) — but never a parent that has other content in it.
 
 ### When folder1 is an archive
 
 Same dry run → approval → `--apply` flow. The temp extraction is always
-removed at the end. After a full `--apply`, leftovers are **trashed, not moved
-to `~/Downloads`**: every unapplied `.psd` (kept pages included, listed in the
-output before it goes) and the archive file itself. With `--only` nothing is
-trashed except the replaced folder2 copies. Everything is recoverable from the
-desktop trash.
+removed at the end. After a full `--apply`, leftovers are trashed as above:
+every unapplied `.psd` and the archive file itself — **every volume** of a
+multi-part `.rar` (`X.part1.rar`, `X.part2.rar`...; pass `part1`, unrar reads
+the rest), not just the one named. With `--only` nothing is trashed except the
+replaced folder2 copies. Everything is recoverable from the desktop trash.
 
 ## What gets compared
 
@@ -96,6 +110,7 @@ cannot tell a crop from a repaint it keeps both files and lets Diego look.
 | Flag | Use |
 | --- | --- |
 | `--apply` | do the moves (trash folder2's copy, move folder1's file in) |
+| `--include-divergent [NAME...]` | with `--apply`, also replace `cut`/`different` pages — all, or just the names given. Only after Diego saw the previews and said so |
 | `--only NAME...` | limit to some files: `--only 089 090.psd` |
 | `--layer "NAME"` | compare a named layer instead of the auto-detected art layer |
 | `--json [PATH]` | write the full report as JSON (default `~/Downloads/<folder1 name>-psd-sync.json`, `COMIC_OUTPUT_DIR` replaces the root) |
@@ -115,9 +130,9 @@ venv/bin/python psd-sync/scripts/sync_psds.py \
 ## Report
 
 Counts first (`N replaced, M kept`), then every kept page with its reason —
-cut sides in pixels, unreadable file, or missing counterpart — and where the
-trashed copies went (desktop trash). If `--apply` fails on a file, that pair
+cut sides in pixels, unreadable file, or missing counterpart — the path of the
+preview comparison folder, and where the trashed copies went (desktop trash). If `--apply` fails on a file, that pair
 is left exactly as it was and the failure is reported per file; the rest of
 the batch still runs. Last, on a full (non `--only`) `--apply` run: which
-leftover files moved to `~/Downloads`, and whether folder1 (or its wrapper)
+leftover files were trashed, and whether folder1 (or its wrapper)
 was trashed or — if something is still inside it — why not.
