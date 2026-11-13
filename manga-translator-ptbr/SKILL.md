@@ -145,7 +145,7 @@ dialogue, writing natural PT-BR that fits a balloon — is done by you
 
 ## Paths
 
-`<repo>` is the comic-skills checkout (the folder holding `setup.sh`). This
+`<repo>` is the image-skills checkout (the folder holding `setup.sh`). This
 skill's scripts live in `<repo>/manga-translator-ptbr/scripts/`; every command
 below is written relative to `<repo>`. Python scripts run with
 `<repo>/venv/bin/python` (onnxruntime, opencv, numpy, pillow); Node scripts

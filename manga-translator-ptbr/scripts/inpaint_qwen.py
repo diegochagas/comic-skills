@@ -143,7 +143,7 @@ def _upload(bgr):
     name = f"inpaint_{uuid.uuid4().hex[:12]}.png"
     png = cv2.imencode(".png", bgr)[1].tobytes()
     b = uuid.uuid4().hex
-    body = (f"--{b}\r\nContent-Disposition: form-data; name=\"subfolder\"\r\n\r\ncomic-skills\r\n"
+    body = (f"--{b}\r\nContent-Disposition: form-data; name=\"subfolder\"\r\n\r\nimage-skills\r\n"
             f"--{b}\r\nContent-Disposition: form-data; name=\"overwrite\"\r\n\r\ntrue\r\n"
             f"--{b}\r\nContent-Disposition: form-data; name=\"image\"; filename=\"{name}\"\r\n"
             f"Content-Type: image/png\r\n\r\n").encode() + png + f"\r\n--{b}--\r\n".encode()

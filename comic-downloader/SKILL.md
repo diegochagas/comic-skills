@@ -8,7 +8,7 @@ description: Download comic/magazine page images from websites whose image URLs 
 One Node script, `comic-downloader/scripts/download.cjs`, plus one JSON
 profile per website in `comic-downloader/sites/<name>/download.config.json`.
 Needs `comic-downloader/node_modules` (axios; `comic-downloader/setup.sh`
-or `npm install` inside `comic-downloader/`, also run by `<repo>/setup.sh`). `<repo>` is the comic-skills checkout; run
+or `npm install` inside `comic-downloader/`, also run by `<repo>/setup.sh`). `<repo>` is the image-skills checkout; run
 everything from there. Files are written to `~/Downloads/<outputDir>/`
 (`COMIC_OUTPUT_DIR` replaces `~/Downloads`): a profile's `outputDir` is a
 folder name under that root (`"dorothee"` → `~/Downloads/dorothee/`), defaults

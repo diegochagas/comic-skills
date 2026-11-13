@@ -31,7 +31,7 @@ that unattended batches waste credits and produce pages Diego rejects later.
 So: generate one page, check it yourself, show it, then STOP and wait for
 his answer. Never start the next page without an explicit yes.
 
-`<repo>` is the comic-skills checkout (the folder holding `setup.sh`); run
+`<repo>` is the image-skills checkout (the folder holding `setup.sh`); run
 the scripts from there with `venv/bin/python` (plain `python3` works too for
 everything except `assemble_cbz.py`/`make_layout.py`/`separate_layers.py`/
 `build_psd.py`, which need the venv's Pillow / OpenCV / onnxruntime;

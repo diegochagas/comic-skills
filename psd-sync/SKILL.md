@@ -8,7 +8,7 @@ description: Given folder1 (the new PSDs) and folder2 (the older folder being up
 Two scripts, `psd-sync/scripts/sync_psds.py` (compare + apply) and
 `previews.py` (side-by-side images, called by the first), run with the repo venv
 (`<repo>/venv/bin/python`; needs psd-tools, OpenCV, numpy — all in the shared
-venv). `<repo>` is the comic-skills checkout.
+venv). `<repo>` is the image-skills checkout.
 
 ```bash
 <repo>/venv/bin/python psd-sync/scripts/sync_psds.py "<folder1>" "<folder2>" [--apply]

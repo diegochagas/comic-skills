@@ -7,7 +7,7 @@ description: Small batch image transforms on a folder - rotate every image by N 
 
 Two scripts in `image-utils/scripts/`. Run them with the repo venv
 (`<repo>/venv/bin/python`, created by `<repo>/setup.sh`) or any Python with
-Pillow. `<repo>` is the comic-skills checkout.
+Pillow. `<repo>` is the image-skills checkout.
 
 **Where results go:** `~/Downloads` (`COMIC_OUTPUT_DIR` replaces that root;
 `--output <dir>` names an exact destination when the user asks for one).
