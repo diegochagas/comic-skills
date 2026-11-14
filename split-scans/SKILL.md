@@ -9,7 +9,7 @@ One script does the whole job, for a file or a folder, images (jpg, png,
 tif, webp) or layered PSDs:
 
 ```bash
-<repo>/venv/bin/python split-scans/scripts/split_scans.py <file-or-folder> [--output DIR] [--rtl] [--spread auto|yes|no] [--spreads STEM ...] [--pages auto|1|2] [--gutter inpaint|white|flatten|none] [--align perspective|none] [--rotate 0|90|-90|180] [--only STEM ...] [--recursive] [--also-images] [--dry-run] [--force]
+<repo>/venv/bin/python split-scans/scripts/split_scans.py <file-or-folder> [--output DIR] [--rtl] [--spread auto|yes|no] [--spreads STEM ...] [--pages auto|1|2] [--gutter inpaint|white|flatten|none] [--seam ai|lama] [--align perspective|none] [--rotate 0|90|-90|180] [--only STEM ...] [--recursive] [--also-images] [--dry-run] [--force]
 ```
 
 `<repo>` is the image-skills checkout; the script needs the shared `venv`
@@ -24,7 +24,7 @@ gutter core is inpainted with manga-translator-ptbr's LaMa model
 | Input stem | Pages found | Output |
 | --- | --- | --- |
 | `082-083` (two consecutive numbers), `030-31` | two pages | `082.psd` + `083.psd` (second number zero-padded to the first's width) |
-| `082-083` and the drawing runs across the spine (a spread) | two pages, kept together | `082-083.psd`: both halves flattened, aligned, joined, the middle rebuilt |
+| `082-083` and the drawing runs across the spine (a spread) | two pages, kept together | `082-083.psd`: both halves flattened, aligned, the strip the binding swallowed given back and the fold taken away by the local Qwen-Image-Edit (`spread_seam.py`; LaMa without ComfyUI, `--seam lama` for the old side-by-side join) |
 | `000`, `264`, `000_spine`, `cover` | one page | `<stem>.psd`; a blank facing page in the scan is dropped (only the page with ink is kept) |
 
 **Which number is which page**: by default the first number is the LEFT
@@ -150,6 +150,8 @@ page.
 | Script | Role |
 | --- | --- |
 | `scripts/split_scans.py` | the CLI: inputs, analysis plan, warps, gutter fix, PSD/image outputs, review sheets, report |
+| `scripts/spread_align.py` | spreads: alignment of the two halves - the straight lines that cross the fold, fitted for the right page's rotation, shift and missing width (`fit_lines`), else the edges' grey profiles (shift only); `fold_column` finds the fold in one scan that holds both pages |
+| `scripts/spread_seam.py` | spreads: join of the two halves aligned by `spread_align.py` (the right page turned when needed), the shaded band by each fold given its page's tones back block by block (`even_band`), the model's strip Poisson-blended in (`seamless`), fold selected (gap + washed-out band) and redrawn by the local Qwen model through manga-translator-ptbr's `qwen_fill.py`, up to 3 passes per tile, each on the best result so far; also a CLI for two page images: `spread_seam.py <left> <right> <out.png> [--theta DEG] [--dy N] [--gap N] [--no-ai]` |
 | `scripts/page_geometry.py` | background and paper mask, gutter valley, envelope edge fits, homography, shading map, inner-edge / spread features |
 | `scripts/psd_io.mjs` | `dump` a PSD's layers (rasters as PNG + text objects as JSON) and `build` a PSD from such a spec (ag-psd) |
 | `package.json`, `setup.sh` | ag-psd + canvas for the PSD side |

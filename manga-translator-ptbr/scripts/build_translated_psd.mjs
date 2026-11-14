@@ -2,7 +2,10 @@
 // Builds, in ONE pass (no GIMP, no PSD re-reads), a translation-ready PSD from
 // a source image plus a blocks JSON:
 //
-//   layer "Original"  – the untouched source image (bottom)
+//   layer "Original"  – the untouched source image (bottom), as a hidden
+//                       Smart Object: the scan stays in the file, cannot be
+//                       painted on by accident and does not show through
+//                       (--no-smart-original keeps a plain visible layer)
 //   layer "Copy"      – an identical copy (the letterer's working raster)
 //   layer "Text N"    – one native Photoshop *paragraph* Type layer per text
 //                       block, positioned/sized exactly over the block and
@@ -13,6 +16,7 @@
 //                                 [--font CCWildWords-Regular] [--no-copy]
 //                                 [--copy-image <png>] [--placeholder [text]]
 //                                 [--original <png>] [--no-fit]
+//                                 [--no-smart-original]
 //
 // --original <png>: use this image as the "Original" layer instead of the
 //   source (split-scans writes originals/<page>.png = the page as scanned,
@@ -54,6 +58,7 @@ import * as path from 'path';
 import { writePsdBuffer } from 'ag-psd';
 import { loadImage, createCanvas } from 'canvas';
 import { fitTextLayers, describeChanges } from './fit_boxes.mjs';
+import { asSmartObject } from './smart_object.mjs';
 
 const args = process.argv.slice(2);
 const pos = args.filter((a) => !a.startsWith('--'));
@@ -70,6 +75,7 @@ const WITH_COPY = !args.includes('--no-copy');
 const COPY_IMAGE = opt('--copy-image', null);
 const ORIGINAL_IMAGE = opt('--original', null);
 const NO_FIT = args.includes('--no-fit');
+const SMART_ORIGINAL = !args.includes('--no-smart-original');
 // --placeholder [text]: fill blocks that have no text with placeholder text
 const PH_IDX = args.indexOf('--placeholder');
 const PLACEHOLDER = PH_IDX === -1 ? null
@@ -222,7 +228,14 @@ async function main() {
   // merged preview image = the Copy (or the Original), so file browsers and
   // tools that only read the composite show the page instead of black
   const topRaster = [...children].reverse().find((l) => l.imageData);
-  fs.writeFileSync(outPath, writePsdBuffer({ width: W, height: H, children, imageData: topRaster && topRaster.imageData }, { generateThumbnail: false }));
+  const psd = { width: W, height: H, children, imageData: topRaster && topRaster.imageData };
+  if (SMART_ORIGINAL) {
+    const file = ORIGINAL_IMAGE || srcPath;
+    // the scan itself rides in the Smart Object when it is a PNG; other formats are stored as PNG
+    const png = /\.png$/i.test(file) ? fs.readFileSync(file) : undefined;
+    asSmartObject(psd, children[0], { png, fileName: path.basename(file).replace(/\.[^.]+$/, '') + '.png', hidden: WITH_COPY });
+  }
+  fs.writeFileSync(outPath, writePsdBuffer(psd, { generateThumbnail: false }));
   console.log(`${path.basename(outPath)}: ${W}x${H}, ${children.length - boxes.length} raster + ${boxes.length} text layer(s)${PLACEHOLDER !== null ? ' (placeholder)' : ''}`);
 }
 

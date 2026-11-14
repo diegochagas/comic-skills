@@ -17,9 +17,10 @@ sampled solid fill they always had.
                                                  # cv2.inpaint otherwise
 
 Model: manga-translator-ptbr/models/lama_fp32.onnx (setup.sh downloads it). Env override:
-INPAINT=telea forces the old OpenCV path; INPAINT=qwen sends the regions to a
-local Qwen-Image-Edit through ComfyUI (inpaint_qwen.py), falling back to LaMa
-when the server is unreachable or the model leaves a region's text in place.
+When a local ComfyUI with Qwen-Image-Edit answers, the regions go to it instead
+(inpaint_qwen.py: GIMPhoto's Generative Fill process), and come back here when
+the model leaves a region's text in place. INPAINT=lama keeps everything on
+LaMa, INPAINT=telea forces the old OpenCV path.
 
 How a region is processed:
   - the mask is grouped into regions (mask dilated by GROUP_PX so the glyphs
@@ -64,8 +65,10 @@ def available():
 
 
 def _qwen():
-    """inpaint_qwen when INPAINT=qwen and its ComfyUI server is usable, else None."""
-    if os.environ.get("INPAINT", "").lower() != "qwen":
+    """inpaint_qwen (GIMPhoto's Generative Fill process on a local
+    Qwen-Image-Edit) when its ComfyUI server is usable, else None.
+    INPAINT=lama or telea opts out; INPAINT=qwen is the same as unset."""
+    if os.environ.get("INPAINT", "").lower() in ("lama", "telea"):
         return None
     import inpaint_qwen
     return inpaint_qwen if inpaint_qwen.available() else None
@@ -217,8 +220,9 @@ def inpaint_lama(img, mask, progress=None, inplace=False, deadline=None, pending
 
 
 def inpaint(img, mask, progress=None, inplace=False, deadline=None, pending=None):
-    """Qwen with INPAINT=qwen (see inpaint_qwen.py), else LaMa when the model is
-    present (and INPAINT != telea), else cv2.inpaint.
+    """Qwen when its server is available (see inpaint_qwen.py; INPAINT=lama
+    opts out), else LaMa when the model is present (and INPAINT != telea),
+    else cv2.inpaint.
     deadline/pending: see inpaint_lama (ignored by the OpenCV fallback)."""
     q = _qwen()
     if q:

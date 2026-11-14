@@ -51,6 +51,30 @@ The same panel through the three layers, bottom to top:
 | --------------------------------------------------------- | ------------------------------------------------------- | ---------------------------------------------------------- |
 | ![Original scan with raw text](examples/066-original.jpg) | ![Text erased, bubbles blank](examples/066-cleaned.jpg) | ![Placeholder text in each box](examples/066-lettered.jpg) |
 
+### Text over art and double-page spreads (local Qwen-Image-Edit)
+
+Text drawn over the art (sound effects in ink splashes over a character,
+lettering on a textured cover) is erased the way it is done by hand in
+GIMPhoto: the text is selected and Generative Fill is asked to erase it,
+here automated with GIMPhoto's own graph on the local **Qwen-Image-Edit**
+in ComfyUI (free, offline). Each result is read by the text detector and
+redone with another seed when lettering is still there; LaMa is the
+fallback. White balloons keep their exact solid fill.
+
+| Scan: sound effects over the panels | Erased by the local Qwen-Image-Edit |
+| --- | --- |
+| ![Four panels with Chinese sound effects in ink splashes over the art](examples/056-sfx-scan.jpg) | ![The same panels with the sound effects erased and the hatching continued](examples/056-sfx-qwen.jpg) |
+| ![Saint Seiya spread with large Chinese lettering over a starfield and a character](examples/084-085-scan.jpg) | ![The same spread with the lettering erased, the starfield and armor continued, no fold in the middle](examples/084-085-qwen.jpg) |
+
+A double-page spread scanned as two pages is aligned, joined, and the fold
+in the middle (the line and the washed-out band next to it) is redrawn by the
+same model, so the spread reads as one picture; the text is then erased on
+the joined picture. The scan stays in the PSD as a hidden Smart Object.
+
+| Two scanned pages side by side | Joined: fold removed, text erased |
+| --- | --- |
+| ![Saint Seiya spread as two scanned pages with a fold in the middle and Chinese text](examples/056-057-scan.jpg) | ![The same spread as one picture with no fold and no text](examples/056-057-qwen.jpg) |
+
 ## Three modes
 
 | Mode | Input | Who writes the text | Review of the boxes | Typical use |

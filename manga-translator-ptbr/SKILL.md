@@ -72,6 +72,18 @@ before the first round:
    (`--spreads STEM ...` keeps those scans as ONE file named `016-017`; the
    file name of a spread is the two page numbers). Everything else is
    unchanged. Check `<OUT>/split/review/` for the spreads.
+   The two halves are not just put side by side: `split-scans/scripts/spread_seam.py`
+   aligns them - rotation, shift and missing width fitted to the straight
+   lines that cross the fold (pages scanned one at a time are often turned
+   ~0.4 deg against each other: 15 px from top to bottom); a spread with no
+   such lines is only shifted. The band next to the fold where the scan is
+   washed out or shaded (darks or lights off, up to ~150 px) gets the page's
+   tones back without being redrawn, and the local Qwen-Image-Edit takes the
+   fold itself away (the fold line plus at most 30 px of band each side), so
+   the spread reads as one picture. Each 768 px tile of the
+   fold is the best of up to 3 model runs (~2-10 min per spread). Look at the
+   middle of every spread at full size: where a line still breaks, rerun that
+   stem (`--force --only STEM`), or pass `--seam lama` for the old join.
 3. Chinese/Japanese scans of manga read right-to-left: the first number is
    the RIGHT page - use `--rtl` (check a folio number on one scan).
 
@@ -153,8 +165,8 @@ need `<skill>/node_modules` (ag-psd, canvas, pngjs - `npm install` in
 `manga-translator-ptbr/`, done by `setup.sh`); the ONNX models are
 `<skill>/models/comictextdetector.pt.onnx` (text detector) and
 `<skill>/models/lama_fp32.onnx` (LaMa inpainting, optional - without it
-busy-background erases fall back to OpenCV Telea; `INPAINT=qwen` sends those
-regions to a local Qwen-Image-Edit instead, see "Local AI inpainting"). The venv comes from
+busy-background erases fall back to OpenCV Telea; with a local ComfyUI those
+regions go to Qwen-Image-Edit instead, see "Text over art"). The venv comes from
 `<repo>/setup.sh`, the rest from `<skill>/setup.sh` (which the root one runs).
 PSDs are written by ag-psd (no GIMP). XCF output needs GIMPhoto (flatpak GIMP 3)
 (`io.github.diegochagas.GIMPhoto`; `GIMP_CMD` env for another launcher).
@@ -255,6 +267,14 @@ context font (the log line says so; the letterer changes the font in GIMP).
   PSD in a folder, rerun-safe; rasters and text stay byte-exact.
 - `spread_from_pages.py <split dir> <pages dir> <out dir>` — rebuilds divided
   spreads as one PSD (see "Spreads stay in one file").
+- `reclean_psd.py <psd> ... [--box x,y,w,h] [--spread LEFT RIGHT | --fold auto|X] [--above LAYER]`
+  — adds a newly cleaned layer to translated PSDs (see "Cleaning again a PSD
+  that is already translated").
+- `add_raster_layer.mjs <in.psd> <png> <out.psd> --name N --above LAYER [--smart-original NAME]`
+  — inserts a PNG as a raster layer above a named one; `--smart-original`
+  also turns a layer into a hidden Smart Object (`smart_object.mjs`).
+- `qwen_fill.py <image> <selection.png> <out.png> [erase|fold]` — one
+  Generative Fill on the local Qwen model, for trying a selection by hand.
 - `fit_text_boxes.mjs <psd|folder> [--from STEM] [--only ...] [--output DIR | --in-place] [--dry-run]`
   — grows every text box to show its whole text and moves boxes whose text
   covers another apart (see "Text boxes always show their whole text").
@@ -690,39 +710,73 @@ uniform background, fills every pixel that differs from the sampled
 background colour - which catches stylised titles the model misses. Each
 component is then filled with the sampled surrounding colour (exact solid
 fill - white/black/grey/red... backgrounds are never AI-touched), or, when
-the surroundings are busy (art, screentone, hatching), **AI-inpainted with
-LaMa** (`manga-translator-ptbr/scripts/inpaint_lama.py`, model `manga-translator-ptbr/models/lama_fp32.onnx`, downloaded
-by `setup.sh`) - the equivalent of Photoshop's generative fill for text over
-drawings. Without the model file (or with `INPAINT=telea`) it falls back to
-`cv2.inpaint`. `<stem>_clean_overlay.jpg` tints what was touched (red = solid
+the surroundings are busy (art, screentone, hatching), **AI-inpainted** -
+by the local Qwen-Image-Edit when ComfyUI is available (next section), else
+by LaMa (`manga-translator-ptbr/scripts/inpaint_lama.py`, model
+`manga-translator-ptbr/models/lama_fp32.onnx`, downloaded by `setup.sh`).
+Without either (or with `INPAINT=telea`) it falls back to `cv2.inpaint`. `<stem>_clean_overlay.jpg` tints what was touched (red = solid
 fill, green = inpainted) - check it before building. The detect json records
 `inpaint_method` (`lama`/`telea`/`qwen`).
 
-### Local AI inpainting with Qwen-Image-Edit (`INPAINT=qwen`)
+### Text over art: erased by the local Qwen-Image-Edit (GIMPhoto's process)
 
-`INPAINT=qwen` (env, on `detect_text.py`, `clean_blocks.py` and the
-`run_*_round.sh` scripts) erases text over art with **Qwen-Image-Edit-2511**
-running locally in ComfyUI - free, offline, and much better at rebuilding
-structure (hair, faces, armor, panel lines) where LaMa smears. It is a hybrid:
-each region is measured and the ones sitting on **flat screentone** (halftone
-dots, no line structure - where the model leaves a flat grey patch and LaMa
-continues the dot pattern) go to LaMa, everything else to the model.
-`INPAINT_ROUTE=qwen` disables that and sends every region to the model.
-Plain-colour fills are untouched either way, and only masked pixels change.
+Text that sits on a drawing (over a character, hatching, armor, a textured
+cover) is erased the way it is done by hand in GIMPhoto - select the text,
+Generative Fill, "erase text" - automated: `scripts/inpaint_qwen.py` turns
+every such text into a selection and runs GIMPhoto's own Generative Fill
+graph (`scripts/qwen_fill.py` + `scripts/gimphoto_comfyui_client.py`, copied
+from GIMPhoto) on the local **Qwen-Image-Edit** in ComfyUI. The model sees
+the drawing, repaints only inside the selection, and only those pixels
+replace the page. It is the default whenever the ComfyUI server and the
+model answer; nothing has to be set. Without them (or with `INPAINT=lama`)
+the same regions go to LaMa, as before.
 
-Costs ~100 s per page that has text over art (RTX 3050 6 GB), against ~10 s
-for LaMa; a page whose text is all in balloons costs nothing extra. A region the model leaves unerased, a crop it fails on, or an
-unreachable server falls back to LaMa automatically (it says so on stderr).
+- **Checked and retried**: the text detector reads every result. Where it
+  still finds lettering (the model sometimes redraws the characters) the
+  region is run again with a new seed, up to 3 times, then handed to LaMa.
+  stderr says so; look at those regions first when reviewing.
+- **Flat screentone stays with LaMa**: regions on halftone dots with no line
+  structure (where the model leaves a flat grey patch and LaMa continues the
+  dots). `INPAINT_ROUTE=qwen` sends those to the model too.
+- Plain-colour fills (white balloons, black boxes) are never AI-touched. A
+  background only counts as plain when it is flat: a cloth cover, a printed
+  pattern or coarse tone (`detect_text.TEXTURE_P80`) is inpainted, because a
+  solid fill shows there as a flat patch.
+- Lettering the detector does not find (sound effects inside ink splashes)
+  is erased from a box given by hand: `inpaint_qwen.erase_boxes()`, exposed
+  as `reclean_psd.py --box`.
+- **Cost**: ~100 s per crop on an RTX 3050 6 GB (a page is one or two
+  crops; +100 s per retry) against ~10 s for LaMa. A page whose text is all
+  in balloons costs nothing extra. For a long book give the rounds a bigger
+  `BUDGET`, or pass `INPAINT=lama` for a fast first pass.
+- **Server**: `COMFYUI_URL` (default `http://127.0.0.1:8188`). When it does
+  not answer, the systemd `--user` unit `COMFYUI_SERVICE` (default
+  `comfyui`, the one local-ai-setup installs) is started and stopped again
+  when the script ends. Model files: the ones GIMPhoto's Generative Fill
+  uses (Qwen-Image-Edit, its text encoder, VAE and Lightning 4-step LoRA),
+  found by name on the server - not installed by `setup.sh`.
 
-Requires ComfyUI with the ComfyUI-GGUF node and the four Qwen model files
-listed in `scripts/inpaint_qwen.py`'s header (not installed by `setup.sh`).
-`COMFYUI_URL` (default `http://127.0.0.1:8188`) and `COMFYUI_SERVICE` (a
-systemd `--user` unit the script starts when the server is down) configure it:
+### The Original layer is a hidden Smart Object
 
-```bash
-INPAINT=qwen COMFYUI_SERVICE=comfyui <repo>/venv/bin/python \
-  manga-translator-ptbr/scripts/detect_text.py <out_dir> <img> [...]
-```
+`build_translated_psd.mjs` writes "Original" as an embedded Smart Object
+with its visibility off: the scan stays in the file (Layer > Smart Objects >
+Edit Contents opens it), cannot be painted on by accident and does not show
+through the erased Copy. Scripts that read it (`verify_translated_psd.mjs`,
+`list_layers.mjs`, psd-sync) still see its pixels. `--no-smart-original`
+writes the old plain, visible layer.
+
+### Cleaning again a PSD that is already translated
+
+`scripts/reclean_psd.py <psd> ...` erases the text of the page as scanned
+once more with the current process and adds the result as a new raster layer
+("Qwen clean") right above the layer edited so far - nothing else in the
+file changes, and the copy is written to `~/Downloads/<folder> recleaned/`.
+`--box x,y,w,h` adds text the detector misses (sound effects in ink
+splashes); `--spread "<left layer>" "<right layer>"` first joins a spread
+kept as two page layers with no visible fold (see "Spreads stay in one
+file"); `--fold auto` does the same for a spread that is ONE scan (both
+pages in the source layer): it is cut at its fold and joined again with no
+visible fold. Look at the new layer before telling Diego it is done.
 
 Run the whole folder in chunks: detect+clean is ~15-25 s/page on 2 cores and
 a shell call may be capped at ~3 min, so loop 5-8 pages per call with a

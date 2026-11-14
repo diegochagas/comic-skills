@@ -49,6 +49,10 @@ MIN_AREA = 24          # drop specks
 RING_IN, RING_OUT = 3, 10   # background sampling ring around a component
 COLOR_TOL = 22         # max per-pixel color distance from the ring's median color
 PLAIN_FRAC = 0.90      # fraction of ring pixels within COLOR_TOL for a solid fill
+TEXTURE_P80 = 10.0     # ...and 80 % of them this close to the median: beyond it the
+                       # background is a texture (cloth cover, printed pattern, coarse
+                       # tone), where a solid fill shows as a flat patch -> inpainted.
+                       # Measured: scanned white balloons 2-4, an orange cloth cover 13-17.
 INPAINT_RADIUS = 4     # cv2.inpaint radius (fallback when LaMa model is missing)
 BLK_CONF = 0.4         # min confidence for a text block box
 BLK_IOU = 0.4          # NMS threshold for text block boxes
@@ -59,6 +63,16 @@ BLK_OVERLAP = 0.3      # min fraction of a stroke component inside text regions
 BLK_SPILL = 0.8        # a component overlapping a block box with less than this
                        # fraction inside it is text merged with art strokes
                        # (hair, hatching): only its part inside the boxes is erased
+
+
+def is_plain(bg, median):
+    """True when the background pixels `bg` (N x 3 float) are one flat colour
+    around `median`: nearly all within COLOR_TOL and no texture.
+    Example: is_plain(ring_pixels, np.median(ring_pixels, axis=0))"""
+    if not bg.size:
+        return False
+    dist = np.linalg.norm(bg - median, axis=1)
+    return (dist <= COLOR_TOL).mean() >= PLAIN_FRAC and np.percentile(dist, 80) <= TEXTURE_P80
 
 
 def letterbox(img):
@@ -176,8 +190,7 @@ def detect_page(sess, path, out_dir):
         ring = cv2.dilate(comp, k_out) & ~cv2.dilate(comp, k_in) & ~(mask[y0:y1, x0:x1] > 0)
         bg = img[y0:y1, x0:x1][ring > 0].astype(np.float32)   # BGR ring pixels
         median = np.median(bg, axis=0) if bg.size else None
-        uniform = (bg.size > 0 and
-                   (np.linalg.norm(bg - median, axis=1) <= COLOR_TOL).mean() >= PLAIN_FRAC)
+        uniform = is_plain(bg, median)
         comp_out = {"bbox": [int(x), int(y), int(bw), int(bh)], "area": int(area)}
         sel = comp > 0     # bbox-slice ops only: full-page `labels == i` OOMs on huge scans
         if uniform:

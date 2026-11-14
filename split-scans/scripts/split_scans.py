@@ -8,7 +8,7 @@ to the page their centre lands on, keeping their fonts and boxes).
 Usage:
   split_scans.py <file-or-folder> [--output DIR] [--rtl] [--spread auto|yes|no] [--spreads STEM ...]
                  [--pages auto|1|2] [--align perspective|rotate|none]
-                 [--gutter inpaint|white|flatten|none] [--only STEM ...]
+                 [--gutter inpaint|white|flatten|none] [--seam ai|lama] [--only STEM ...]
                  [--recursive] [--dry-run] [--review-only] [--force]
 
 Naming: a stem with two consecutive numbers (082-083, 030-31) is a scan of
@@ -18,7 +18,9 @@ number (000, 264, 000_spine)
 is one page: the scanner border is cut, the page flattened, and if the scan
 also shows a blank facing page only the page with ink is kept. A two-page
 scan whose artwork continues across the spine (a spread) is kept as ONE
-file (082-083) with the two halves aligned and the middle rebuilt, unless
+file (082-083) with the two halves aligned, the strip the binding swallowed
+given back and the fold taken away by the local Qwen-Image-Edit model
+(spread_seam.py; --seam lama for the old side-by-side join), unless
 --spread no.
 
 Output: ALWAYS a layered PSD per page, <--output>/<page>.psd (default
@@ -64,6 +66,7 @@ PSD_EXT = {".psd", ".psb"}
 NODE = "node"
 PSD_IO = os.path.join(HERE, "psd_io.mjs")
 
+SEAM_MAX_DY = 30     # px the halves of one scan may be out of line vertically
 _inpaint_mod = None
 
 
@@ -281,6 +284,26 @@ def join_spread(left, right):
     return np.concatenate([pad(left), pad(right)], axis=1)
 
 
+def seam_join(left, right, plan, redraw):
+    """The two halves of a spread as one picture (spread_seam.py): aligned,
+    with the strip the binding swallowed given back; on fixed layers
+    (redraw) the fold is taken away by the local Qwen model. The alignment
+    is found once, on the first layer, so every layer stays registered."""
+    import spread_seam
+    pages = plan["pages"]
+    if "seam" not in plan:
+        found = spread_seam.find_alignment(left, right, max_dy=SEAM_MAX_DY)
+        plan["seam"] = {"dy": found["dy"], "gap": found["gap"], "theta": found["theta"], "align": found["method"]}
+    dy, gap, theta = plan["seam"]["dy"], plan["seam"]["gap"], plan["seam"]["theta"]
+    if not redraw:
+        return spread_seam.join_pages(left, right, dy, gap, (0, 0), theta)[0]
+    core = max(left.shape[1] - pages[0]["core"][0] if pages[0]["core"] else 0,
+               pages[1]["core"][1] if pages[1]["core"] else 0)
+    pic, info = spread_seam.join_spread(left, right, dy, gap, eat=max(spread_seam.EAT, core + 3), theta=theta)
+    plan["seam"]["method"] = info["method"]
+    return pic
+
+
 def decide_spread(plan, warped_gray, opts, stem=""):
     """Fill plan['spread'] from the two warped grey pages (after flattening).
     A stem named in --spreads is always a spread (the agent's call: the
@@ -372,6 +395,9 @@ def process_rasters(layers, plan, opts, paper):
         joined = []
         for li in range(len(layers)):
             left, right = per_page[0][li], per_page[1][li]
+            if opts.seam == "ai":
+                joined.append(seam_join(left, right, plan, redraw=layers[li][2]))
+                continue
             j = join_spread(left, right)
             # rebuild the seam once more as one region across both cores
             if layers[li][2] and opts.gutter in ("inpaint", "white") and (pages[0]["core"] or pages[1]["core"]):
@@ -467,8 +493,10 @@ def process_psd(path, plan, out_paths, opts, paper, work, dump):
                 best, bestd, bestpt = i, d, (x, y)
         x, y = bestpt
         if plan["spread"]:
+            seam = plan.get("seam") or {"dy": 0, "gap": 0}     # rows/columns seam_join cut or added
             if best == 1:
-                x += pages[0]["w"]
+                x += pages[0]["w"] + seam["gap"]
+            y -= max(0, -seam["dy"]) if best == 1 else max(0, seam["dy"])
             best = 0
         dx, dy = x - cx, y - cy
         # a box that straddled the gutter lands partly off its page: slide it in
@@ -544,6 +572,9 @@ def main():
     ap.add_argument("--pages", choices=["auto", "1", "2"], default="auto")
     ap.add_argument("--align", choices=["perspective", "none"], default="perspective")
     ap.add_argument("--gutter", choices=["inpaint", "white", "flatten", "none"], default="inpaint")
+    ap.add_argument("--seam", choices=["ai", "lama"], default="ai",
+                    help="spreads: ai = halves aligned, missing strip given back, fold removed by the local Qwen model "
+                         "(LaMa when ComfyUI is not available); lama = halves put side by side, core rebuilt by LaMa")
     ap.add_argument("--only", nargs="*", help="stems to process")
     ap.add_argument("--rotate", type=int, choices=[0, 90, -90, 180], default=0, help="turn every scan first (degrees clockwise)")
     ap.add_argument("--also-images", action="store_true", help="also write images/<page>.png (fixed) and originals/<page>.png")
@@ -633,6 +664,10 @@ def main():
                         build_image_psd(pth, o[0], o[1], work, i)
                         write_side_images(opts, pth, o[0], o[1])
                 review_sheet(ana, plan, results, os.path.join(out, "review", stem + ".jpg"), desc[:120])
+                if plan.get("seam"):
+                    rec["seam"] = plan["seam"]      # dy, gap, score, method of the spread join
+                    print(f"  spread joined ({plan['seam']['align']}): turn {plan['seam']['theta']} deg, dy {plan['seam']['dy']}, gap {plan['seam']['gap']}, "
+                          f"fold redrawn by {plan['seam'].get('method', 'none')}")
                 rec["seconds"] = round(time.time() - t0, 1)
                 report.write(json.dumps(rec, ensure_ascii=False, default=lambda o: o.tolist() if hasattr(o, "tolist") else str(o)) + "\n"); report.flush()
         except Exception as e:
