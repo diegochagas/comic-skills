@@ -332,10 +332,26 @@ def forced(row, args):
     return not names or row["file"] in names
 
 
+def comparison_dir(src_dir, out_root, archive):
+    """Where the dry run writes its preview JPGs: <out_root>/<folder1 or archive name> comparison."""
+    label = archive.name.split(".part")[0].removesuffix(archive.suffix) if archive else src_dir.name
+    return out_root / f"{label} comparison"
+
+
+def trash_comparison(src_dir, out_root, archive):
+    """After --apply the previews have served their purpose (Diego saw them before approving):
+    trash the comparison folder; returns its path, or None when the dry run made none."""
+    folder = comparison_dir(src_dir, out_root, archive)
+    if not folder.is_dir():
+        return None
+    used = trash(folder)
+    print(f"\n{folder} trashed ({used}) - preview comparison no longer needed")
+    return str(folder)
+
+
 def write_previews(src_dir, dst_dir, rows, out_root, archive):
     """Dry run: side-by-side JPGs of every divergent page so Diego can check by eye."""
-    label = archive.name.split(".part")[0].removesuffix(archive.suffix) if archive else src_dir.name
-    made = make_previews(src_dir, dst_dir, rows, out_root / f"{label} comparison")
+    made = make_previews(src_dir, dst_dir, rows, comparison_dir(src_dir, out_root, archive))
     if made:
         print(f"\npreview comparison ({len(made)} page(s), folder1 left / folder2 right): {made[0].parent}")
 
@@ -416,6 +432,7 @@ def main():
         write_previews(src_dir, dst_dir, rows, out_root, archive)
 
     source_trashed = None
+    comparison_trashed = None
 
     if args.apply:
         print()
@@ -437,6 +454,7 @@ def main():
                 source_trashed = str(archive)
             else:
                 source_trashed = report_empty_source(src_dir)
+        comparison_trashed = trash_comparison(src_dir, out_root, archive)
     elif to_move:
         note = (f"; the {len(rows) - len(to_move)} kept file(s) would be trashed with the rest of "
                 f"folder1 (or the archive) unless --include-divergent names them")
@@ -451,6 +469,7 @@ def main():
             "folder1": str(src_dir), "folder2": str(dst_dir),
             "applied": bool(args.apply),
             "source_trashed": source_trashed,
+            "comparison_trashed": comparison_trashed,
             "generated_at": time.strftime("%Y-%m-%d %H:%M:%S"),
             "files": rows,
         }, indent=2, ensure_ascii=False))

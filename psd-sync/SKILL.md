@@ -63,7 +63,8 @@ physically left in folder1 — pages not replaced (`cut`/`different` without
 `--include-divergent`, `no_counterpart`, `error`) as well as any page whose
 apply failed — is **trashed** (listed in the output as it goes; recoverable
 from the desktop trash), never left behind and never moved to `~/Downloads`.
-The preview comparison folder is not touched: Diego deletes it himself.
+The preview comparison folder (made by the dry run) is trashed too once `--apply`
+has run, `--only` included — it only existed so Diego could decide.
 Once folder1 is empty it gets trashed too: its parent as well, when
 folder1 was that parent's only entry (the common `Name/Name/` download-
 extraction wrapper) — but never a parent that has other content in it.
