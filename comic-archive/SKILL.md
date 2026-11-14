@@ -7,7 +7,7 @@ description: Pack a folder of page images into a .cbr/.cbz comic archive, or unp
 
 Two scripts in `comic-archive/scripts/`. Run them with the repo venv
 (`<repo>/venv/bin/python`, created by `<repo>/setup.sh`) or any Python 3.10+
-that has Pillow when conversion flags are used. `<repo>` is the comic-skills
+that has Pillow when conversion flags are used. `<repo>` is the image-skills
 checkout.
 
 **Where results go:** `~/Downloads` (`COMIC_OUTPUT_DIR` replaces that root;

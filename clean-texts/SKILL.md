@@ -22,7 +22,7 @@ local run leaves stylised text behind.
 
 One script, `clean-texts/scripts/clean_texts.py`, run with the repo venv
 (`<repo>/venv/bin/python`; needs Pillow, OpenCV, numpy — all in the shared
-venv). `<repo>` is the comic-skills checkout.
+venv). `<repo>` is the image-skills checkout.
 
 ## Arguments
 

@@ -7,7 +7,7 @@ description: Turn PDFs into per-page JPG images (any DPI, one folder per PDF or 
 
 Two scripts in `pdf-psd-convert/scripts/`. Run them with the repo venv
 (`<repo>/venv/bin/python`, created by `<repo>/setup.sh`; it has PyMuPDF,
-Pillow and psd-tools). `<repo>` is the comic-skills checkout.
+Pillow and psd-tools). `<repo>` is the image-skills checkout.
 
 **Where results go:** `~/Downloads` (`COMIC_OUTPUT_DIR` replaces that root;
 `--output <dir>` names an exact destination when the user asks for one).

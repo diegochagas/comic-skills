@@ -1,4 +1,4 @@
-# comic-skills
+# image-skills
 
 Diego's agent skills for making and working with comics and manga: an AI
 comic studio (page scripts → AI-generated pages reviewed one by one, every
@@ -118,7 +118,7 @@ global directories, the same way:
 ```sh
 for s in generate-comic-page manga-translator-ptbr split-scans clean-texts comic-downloader comic-archive psd-to-cbr pdf-psd-convert psd-sync psd-xcf-convert docx-odt-convert describe-pages find-pages image-utils; do
   for h in ~/.claude/skills ~/.agents/skills ~/.codex/skills; do
-    mkdir -p "$h" && ln -sfn ~/Projects/comic-skills/$s "$h/$s"
+    mkdir -p "$h" && ln -sfn ~/Projects/image-skills/$s "$h/$s"
   done
 done
 ```
@@ -163,8 +163,8 @@ with `--force` to redo it. `index.json` records which model wrote each set.
 ## Setup
 
 ```bash
-git clone <this repo> ~/Projects/comic-skills
-cd ~/Projects/comic-skills
+git clone <this repo> ~/Projects/image-skills
+cd ~/Projects/image-skills
 ./setup.sh     # shared venv + python deps, then every <skill>/setup.sh (node_modules, ONNX models, GIMP checks)
 ```
 

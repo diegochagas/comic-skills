@@ -11,7 +11,7 @@ counts as done. No LLM API usage; the only AI is local ComfyUI.
 
 Scripts in `restore-photos/scripts/`, run with the repo venv
 (`<repo>/venv/bin/python`, created by `<repo>/setup.sh`). `<repo>` is the
-comic-skills checkout. All paths below are relative to it.
+image-skills checkout. All paths below are relative to it.
 
 | Script | Does |
 | --- | --- |

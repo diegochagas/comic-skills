@@ -9,7 +9,7 @@ One command, `docx-odt-convert/scripts/convert.py`. It needs LibreOffice
 (`soffice`) and its Python binding `uno` (package `python3-uno`), which only
 the system `python3` has — run it with `python3`, not the repo venv (from the
 venv it re-launches itself with `/usr/bin/python3`). `<repo>` is the
-comic-skills checkout; `docx-odt-convert/setup.sh` checks the requirements.
+image-skills checkout; `docx-odt-convert/setup.sh` checks the requirements.
 
 ```bash
 python3 <repo>/docx-odt-convert/scripts/convert.py "<file or folder>" [flags]

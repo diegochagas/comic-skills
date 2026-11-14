@@ -7,7 +7,7 @@ description: Describe every page image under a folder (walked recursively - a wh
 
 One script, `describe-pages/scripts/describe_pages.py`, run with the repo
 venv (`<repo>/venv/bin/python`; needs only Pillow). `<repo>` is the
-comic-skills checkout. The model is **Qwen3-VL 4B in Ollama** (`qwen3-vl:4b`,
+image-skills checkout. The model is **Qwen3-VL 4B in Ollama** (`qwen3-vl:4b`,
 installed by `describe-pages/setup.sh`), running on this machine: no API,
 no credits, nothing leaves the computer. There is NO LLM API usage.
 

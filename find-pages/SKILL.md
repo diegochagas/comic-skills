@@ -6,7 +6,7 @@ description: Search a set of page descriptions written by describe-pages and ret
 # find-pages — image paths of the pages that show something
 
 One script, `find-pages/scripts/find_pages.py`, run with the repo venv
-(`<repo>/venv/bin/python`; stdlib only). `<repo>` is the comic-skills
+(`<repo>/venv/bin/python`; stdlib only). `<repo>` is the image-skills
 checkout. It reads `~/Downloads/<set> descriptions/pages.jsonl`
 (`COMIC_OUTPUT_DIR` replaces `~/Downloads`; a folder path works too), writes
 nothing, and prints paths of the ORIGINAL files in the folder describe-pages

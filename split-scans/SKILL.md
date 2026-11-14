@@ -12,7 +12,7 @@ tif, webp) or layered PSDs:
 <repo>/venv/bin/python split-scans/scripts/split_scans.py <file-or-folder> [--output DIR] [--rtl] [--spread auto|yes|no] [--spreads STEM ...] [--pages auto|1|2] [--gutter inpaint|white|flatten|none] [--align perspective|none] [--rotate 0|90|-90|180] [--only STEM ...] [--recursive] [--also-images] [--dry-run] [--force]
 ```
 
-`<repo>` is the comic-skills checkout; the script needs the shared `venv`
+`<repo>` is the image-skills checkout; the script needs the shared `venv`
 (opencv, numpy, pillow) and this skill's `node_modules` (ag-psd + canvas,
 installed by `split-scans/setup.sh`, which the root `setup.sh` runs). The
 gutter core is inpainted with manga-translator-ptbr's LaMa model
