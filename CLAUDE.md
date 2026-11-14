@@ -60,20 +60,32 @@ edit them.
   skill always runs its pipeline to the end and delivers PSDs; XCF only
   when the request explicitly asks for GIMP files.
 - Erasing text over art (`manga-translator-ptbr`'s `inpaint_lama.py`, used by
-  `detect_text.py`/`clean_blocks.py` and by `clean-texts --backend local`) has
-  three backends, chosen with `INPAINT`: LaMa (default), `telea`, and `qwen` =
-  `inpaint_qwen.py`, a local Qwen-Image-Edit-2511 in ComfyUI (free, offline,
-  best on structured art; needs a running server, see that file's header).
-  `qwen` is really a hybrid: flat-screentone regions still go to LaMa
-  (`INPAINT_ROUTE=qwen` forces the model everywhere), and anything the model
-  misses or fails on falls back to LaMa on its own.
+  `detect_text.py`/`clean_blocks.py` and by `clean-texts --backend local`):
+  when the local ComfyUI and Qwen-Image-Edit answer, the regions go to
+  `inpaint_qwen.py` - GIMPhoto's Generative Fill process (select the text,
+  ask the model to erase it), run through `qwen_fill.py` on
+  `gimphoto_comfyui_client.py`, a copy of GIMPhoto's client that is never
+  edited here (copy it again to update). Each result is read by the text
+  detector and retried with a new seed; what the model cannot erase, and
+  flat screentone (`INPAINT_ROUTE=qwen` disables that routing), goes to
+  LaMa. `INPAINT=lama` / `telea` opt out. Qwen results differ per seed:
+  any new use of the model needs a measurable check and a retry, as
+  `inpaint_qwen._unfinished` and `spread_seam.fold_left` do.
+- "Original" is written as a hidden embedded Smart Object
+  (`smart_object.mjs`, in `build_translated_psd.mjs`); readers still get its
+  pixels. `reclean_psd.py` adds a newly cleaned layer to finished PSDs
+  without touching their other layers.
 
 - `split-scans` is pure OpenCV geometry (`page_geometry.py`: paper mask from
   the scanner background colour, gutter valley per row band, envelope line
   fits of the paper edges, homography per page, illumination map of the
   shadow band) plus `psd_io.mjs` (ag-psd dump/build so every raster layer is
   warped the same way and text layers travel with their page). The gutter
-  core reuses manga-translator-ptbr's `inpaint_lama.py`. Automatic spread
+  core reuses manga-translator-ptbr's `inpaint_lama.py`. A spread's halves are
+  joined by `spread_seam.py`: rotation, shift and missing width fitted to the
+  straight lines that cross the fold (`spread_align.py`; grey profiles, shift
+  only, when there are none), then the fold (gap + washed-out band) redrawn by the local
+  Qwen model, the alignment found once so every layer stays registered. Automatic spread
   detection is deliberately conservative: a picture that spans two pages but
   keeps its inner margins is the agent's call (`--spread yes --only STEM`).
   Reading order is a flag (`--rtl` = first number on the right page), never

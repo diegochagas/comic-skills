@@ -158,7 +158,7 @@ def clean_page(sess, det_path, pad, deadline=None):
         is_plain = False
         if bg.size:
             med = np.median(bg, axis=0)
-            if (np.linalg.norm(bg - med, axis=1) <= dt.COLOR_TOL).mean() >= dt.PLAIN_FRAC:
+            if dt.is_plain(bg, med):
                 plain.append(((bx, by, bw, bh), med))
                 is_plain = True
         # Fallback for display text the detector cannot segment (big white
@@ -262,8 +262,7 @@ def clean_page(sess, det_path, pad, deadline=None):
         ring = cv2.dilate(comp, k_out) & ~cv2.dilate(comp, k_in) & ~(mask[y0:y1, x0:x1] > 0)
         bg = img[y0:y1, x0:x1][ring > 0].astype(np.float32)
         median = np.median(bg, axis=0) if bg.size else None
-        uniform = (bg.size > 0 and
-                   (np.linalg.norm(bg - median, axis=1) <= dt.COLOR_TOL).mean() >= dt.PLAIN_FRAC)
+        uniform = dt.is_plain(bg, median)
         sel = comp > 0
         if uniform:
             cleaned[y0:y1, x0:x1][sel] = median.round().clip(0, 255).astype(np.uint8)
