@@ -215,7 +215,7 @@ place.
 | `comic-archive` | `~/Downloads/<folder>.cbr`, `~/Downloads/<folder>/<chapter>.cbr`; unpacked: `~/Downloads/<folder>/<archive>/` |
 | `psd-to-cbr` | `~/Downloads/<folder>.cbr`, `~/Downloads/<folder>/<chapter>.cbr` |
 | `pdf-psd-convert` | `~/Downloads/<folder>/<PdfName>/`; `~/Downloads/<folder> JPG/` |
-| `psd-sync` | nothing by default (it moves files between the two folders it is given); a dry run with cut/different pages writes `~/Downloads/<folder1 name> comparison/`; `--json` writes `~/Downloads/<folder1 name>-psd-sync.json` |
+| `psd-sync` | nothing by default (it moves files between the two folders it is given); a dry run with cut/different pages writes `~/Downloads/<folder1 name> comparison/` (trashed again by `--apply`); `--json` writes `~/Downloads/<folder1 name>-psd-sync.json` |
 | `psd-xcf-convert` | `~/Downloads/<folder or file name> converted/` (`.xcf` for every PSD, `.psd` for every XCF, `_preview/` with `--preview`) |
 | `docx-odt-convert` | `~/Downloads/<folder or file name> converted/` (`.odt` for every `.docx`/`.doc`, `.docx` for every `.odt`); with `--in-place`, next to each source |
 | `describe-pages` | `~/Downloads/<name> descriptions/` (`pages.jsonl`, `index.json`; `<name>` = slug of the source's last two path parts) |
